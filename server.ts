@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
+import cors from "cors";
 
 dotenv.config();
 
@@ -9,10 +10,13 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Enable CORS for SharePoint integration
+  app.use(cors());
   app.use(express.json());
   
   // API Route to proxy Power Automate
   app.post("/api/query", async (req, res) => {
+    console.log("Received query request:", req.body);
     try {
       const { query, id_score } = req.body || {};
       if (!query) {
@@ -30,15 +34,21 @@ async function startServer() {
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error(`Power Automate error (${response.status}):`, errorText);
         return res.status(response.status).json({ error: `Power Automate error: ${response.status}`, details: errorText });
       }
 
       const data = await response.json();
       res.json(data);
     } catch (error: any) {
-      console.error("Query error:", error);
+      console.error("Query proxy error:", error);
       res.status(500).json({ error: error.message });
     }
+  });
+
+  // Health check
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
   });
 
   // Vite middleware for development

@@ -3,7 +3,8 @@
  */
 
 export async function postSqlQuery<T = any[]>(query: string, id_score: string = "default"): Promise<T> {
-  const response = await fetch("/api/query", {
+  const baseUrl = (process.env.APP_URL || "").replace(/\/$/, "");
+  const response = await fetch(`${baseUrl}/api/query`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -11,21 +12,22 @@ export async function postSqlQuery<T = any[]>(query: string, id_score: string = 
     body: JSON.stringify({ query, id_score })
   });
 
+  const text = await response.text();
+
   if (!response.ok) {
     let errorMsg = `Erro: ${response.status}`;
     try {
-      const errorData = await response.json();
+      const errorData = JSON.parse(text);
       errorMsg = errorData.error || errorMsg;
     } catch (e) {
-      errorMsg = await response.text();
+      errorMsg = text || errorMsg;
     }
     throw new Error(errorMsg);
   }
 
   try {
-    return await response.json();
+    return JSON.parse(text);
   } catch (e) {
-    const text = await response.text();
     console.error("Failed to parse JSON from response:", text);
     throw new Error("Resposta do servidor não está em formato JSON");
   }
