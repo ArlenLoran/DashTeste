@@ -14,6 +14,12 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
   
+  // Request logging
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
+  
   // API Route to proxy Power Automate
   app.post("/api/query", async (req, res) => {
     console.log("Received query request:", req.body);
