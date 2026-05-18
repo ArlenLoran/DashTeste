@@ -14,6 +14,7 @@ import { Section, Metric } from '../types';
 
 const LIST_DIVISOES = "App_Dash_Divisoes";
 const LIST_CARDS = "App_Dash_Cards";
+const LIST_RULES = "App_Dash_Regras";
 
 export async function ensureSharePointConfig() {
   if (!hasSpContext()) return;
@@ -68,6 +69,27 @@ export async function ensureSharePointConfig() {
         });
       }
     }
+
+    // 3. Ensure Rules List
+    if (!(await spListExists(LIST_RULES))) {
+      console.log("Creating list Regras...");
+      await spCreateList(LIST_RULES);
+      await spListEnsureNumberField(LIST_RULES, "CardId");
+      
+      // Seed initial rules for 1, 2, 3
+      const seedRules = [
+        { CardId: 1, Title: "Estoque físico vs sistêmico deve ser zero." },
+        { CardId: 1, Title: "Transações pendentes há mais de 24h são críticas." },
+        { CardId: 2, Title: "Validar se todos os SKUs possuem peso cadastrado." },
+        { CardId: 2, Title: "Divergência superior a 5% exige recontagem." },
+        { CardId: 3, Title: "Saldo bloqueado deve ter motivo preenchido." },
+        { CardId: 3, Title: "Comparar reserva vs disponível no WMS." }
+      ];
+
+      for (const rule of seedRules) {
+        await spListAddItem(LIST_RULES, rule);
+      }
+    }
   } else {
     // Just ensure fields if list already existed
     await spListEnsureNumberField(LIST_DIVISOES, "OrderIndex");
@@ -86,6 +108,12 @@ export async function ensureSharePointConfig() {
       await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
       await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
     }
+
+    // Ensure Rules list exists and fields are correct
+    if (!(await spListExists(LIST_RULES))) {
+      await spCreateList(LIST_RULES);
+      await spListEnsureNumberField(LIST_RULES, "CardId");
+    }
   }
 }
 
@@ -96,15 +124,17 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
   }
 
   try {
-    const [divRes, cardRes] = await Promise.all([
+    const [divRes, cardRes, ruleRes] = await Promise.all([
       spListGetItems(LIST_DIVISOES, { orderBy: "OrderIndex asc" }),
-      spListGetItems(LIST_CARDS, { orderBy: "OrderIndex asc" })
+      spListGetItems(LIST_CARDS, { orderBy: "OrderIndex asc" }),
+      spListGetItems(LIST_RULES)
     ]);
 
-    if (!divRes.status || !cardRes.status) throw new Error("Failed to fetch SP config");
+    if (!divRes.status || !cardRes.status || !ruleRes.status) throw new Error("Failed to fetch SP config");
 
     const divisions = divRes.data;
     const cards = cardRes.data;
+    const allRules = ruleRes.data;
 
     const sections: Section[] = divisions.map((div: any) => ({
       title: div.Title,
@@ -122,6 +152,11 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
             }
           }
 
+          // Rules for this card
+          const cardRules = allRules
+            .filter((r: any) => Number(r.CardId) === Number(c.Id))
+            .map((r: any) => r.Title);
+
           return {
             id: String(c.Id),
             title: c.Title,
@@ -134,7 +169,8 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
             objective: c.Objective,
             sqlQuery: c.SqlQuery, // Persist query to fetch later
             history: [],
-            details: cachedDetails
+            details: cachedDetails,
+            rules: cardRules
           };
         })
     }));
@@ -175,7 +211,8 @@ function getLocalConfig(): Section[] {
           sqlQuery: SQL_QUERY_SEPARACAO_SALDO,
           objective: "Consulta dinâmica de separação de saldo.",
           history: [],
-          details: []
+          details: [],
+          rules: ["Estoque físico vs sistêmico deve ser zero.", "Transações pendentes há mais de 24h são críticas."]
         }
       ]
     },
@@ -191,7 +228,8 @@ function getLocalConfig(): Section[] {
           sqlQuery: SQL_QUERY_VALIDACAO_SISTEMICA,
           objective: "Consulta dinâmica de validação sistêmica.",
           history: [],
-          details: []
+          details: [],
+          rules: ["Validar se todos os SKUs possuem peso cadastrado.", "Divergência superior a 5% exige recontagem."]
         }
       ]
     },
@@ -207,7 +245,8 @@ function getLocalConfig(): Section[] {
           sqlQuery: SQL_QUERY_ESTOQUE,
           objective: "Consulta dinâmica de estoque via validação sistêmica.",
           history: [],
-          details: []
+          details: [],
+          rules: ["Saldo bloqueado deve ter motivo preenchido.", "Comparar reserva vs disponível no WMS."]
         }
       ]
     }

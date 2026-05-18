@@ -652,6 +652,7 @@ function DivergenceModal({ metric, onClose }: { metric: Metric, onClose: () => v
                     {metric.rules.map((rule, idx) => (
                       <div key={idx} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm border-l-4 border-l-amber-500">
                         <p className="text-slate-700 font-bold whitespace-pre-line text-sm leading-relaxed">
+                          <span className="text-amber-600 font-black mr-2">REGRA {idx + 1}:</span>
                           {rule}
                         </p>
                       </div>
