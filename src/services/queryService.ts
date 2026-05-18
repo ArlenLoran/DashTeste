@@ -6,45 +6,16 @@
  * Gets the base URL for API calls. 
  * Prioritizes process.env.APP_URL but handles placeholders and relative paths.
  */
-function getApiBaseUrl(): string {
-  let url = (process.env.APP_URL || "").trim().replace(/\/$/, "");
-  
-  // If it's a placeholder or empty, try to detect from window or use relative
-  if (!url || url === "MY_APP_URL" || url.includes("PLACEHOLDER")) {
-    // If we're in a browser and NOT on SharePoint domain, use current origin
-    if (typeof window !== 'undefined' && !window.location.hostname.includes('sharepoint.com')) {
-      return ""; // Relative path is safest on the same origin
-    }
-    
-    // If we ARE on SharePoint, we really need the absolute URL.
-    // Try to find it from the script tag as a fallback
-    if (typeof document !== 'undefined') {
-      const scripts = document.getElementsByTagName('script');
-      for (let i = 0; i < scripts.length; i++) {
-        const src = scripts[i].src;
-        if (src && (src.includes('main.tsx') || src.includes('.js'))) {
-          try {
-            const parsed = new URL(src);
-            // Ignore SharePoint origins
-            if (!parsed.hostname.includes('sharepoint.com')) {
-              return parsed.origin;
-            }
-          } catch (e) {}
-        }
-      }
-    }
-    
-    return ""; // Fallback to relative
-  }
-  
-  return url;
-}
-
 export async function postSqlQuery<T = any[]>(query: string, id_score: string = "default"): Promise<T> {
-  const baseUrl = getApiBaseUrl();
-  const endpoint = `${baseUrl}/api/query`;
+  // Prefer direct Power Automate URL if available (matches user's working setup)
+  const directUrl = process.env.POWER_AUTOMATE_URL;
   
-  console.log(`Executing SQL Query toward: ${endpoint}`);
+  // Define endpoint: Direct URL or fallback to relative proxy
+  const endpoint = directUrl && directUrl !== "MY_POWER_AUTOMATE_URL" 
+    ? directUrl 
+    : "/api/query";
+  
+  console.log(`Executing SQL Query via: ${endpoint === directUrl ? 'Direct Link' : 'Local Proxy'}`);
 
   const response = await fetch(endpoint, {
     method: "POST",
