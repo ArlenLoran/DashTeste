@@ -804,12 +804,12 @@ export default function App() {
   }, []);
 
   // Fetch Dynamic Data based on items in state
-  const fetchAllData = async () => {
+  const fetchAllData = async (forceResetTimers = false) => {
     if (data.length === 0) return;
     setIsRefreshing(true);
     
     // We need to fetch for all metrics that have a sqlQuery
-    const fetchPromises: { promise: Promise<any>, sectionIdx: number, metricIdx: number }[] = [];
+    const fetchPromises: { promise: Promise<any>, sectionIdx: number, metricIdx: number, metric: Metric }[] = [];
 
     data.forEach((section, sIdx) => {
       section.metrics.forEach((metric, mIdx) => {
@@ -817,7 +817,8 @@ export default function App() {
           fetchPromises.push({
             promise: postSqlQuery(metric.sqlQuery, metric.id),
             sectionIdx: sIdx,
-            metricIdx: mIdx
+            metricIdx: mIdx,
+            metric: metric
           });
         }
       });
@@ -830,24 +831,41 @@ export default function App() {
 
     try {
       const results = await Promise.all(fetchPromises.map(p => p.promise));
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const nowString = now.toLocaleString('pt-BR');
       
+      const metricsToUpdate: { id: string, iso: string }[] = [];
+
       setData(current => {
         const updated = [...current];
         results.forEach((result, i) => {
-          const { sectionIdx, metricIdx } = fetchPromises[i];
+          const { sectionIdx, metricIdx, metric } = fetchPromises[i];
           if (updated[sectionIdx] && updated[sectionIdx].metrics[metricIdx]) {
             const rowCount = Array.isArray(result) ? result.length : 0;
+            const shouldUpdateTimestamp = forceResetTimers || !metric.lastUpdateAt;
+            
             updated[sectionIdx].metrics[metricIdx] = {
               ...updated[sectionIdx].metrics[metricIdx],
               value: rowCount,
               details: Array.isArray(result) ? result : [],
-              lastUpdate: new Date().toLocaleString('pt-BR'),
-              status: rowCount > 0 ? 'error' : 'ok'
+              status: rowCount > 0 ? 'error' : 'ok',
+              ...(shouldUpdateTimestamp ? {
+                lastUpdate: nowString,
+                lastUpdateAt: nowIso
+              } : {})
             };
+
+            if (shouldUpdateTimestamp) {
+              metricsToUpdate.push({ id: metric.id, iso: nowIso });
+            }
           }
         });
         return updated;
       });
+
+      // Persist to SP (outside of state setter)
+      metricsToUpdate.forEach(m => saveMetricLastUpdate(m.id, m.iso));
       
       setEventLog(prev => [{
         id: Math.random().toString(36).substr(2, 9),
@@ -875,7 +893,7 @@ export default function App() {
 
 
   const refreshData = () => {
-    fetchAllData();
+    fetchAllData(true);
   };
 
   const refreshSingleMetric = async (metric: Metric) => {

@@ -113,8 +113,8 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
           title: c.Title,
           value: 0,
           status: 'ok' as const,
-          lastUpdate: c.LastUpdateDate ? new Date(c.LastUpdateDate).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR'),
-          lastUpdateAt: c.LastUpdateDate || new Date().toISOString(),
+          lastUpdate: c.LastUpdateDate ? new Date(c.LastUpdateDate).toLocaleString('pt-BR') : 'Não atualizado',
+          lastUpdateAt: c.LastUpdateDate || undefined,
           refreshInterval: c.RefreshInterval || 5, // Default 5 mins
           isDynamic: true,
           objective: c.Objective,
