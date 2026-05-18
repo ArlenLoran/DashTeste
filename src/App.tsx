@@ -138,20 +138,6 @@ function MiniSparkline({ data, color }: { data: MetricHistory[], color: string }
 }
 
 function MetricCard({ metric, onClick, onRefresh, isWarRoom }: MetricCardProps) {
-  const hasHistory = metric.history && metric.history.length > 1;
-  let trend: { value: number; isUp: boolean; text: string } | null = null;
-  
-  if (hasHistory) {
-    const lastValue = metric.history![0];
-    const prevValue = metric.history![1];
-    const diff = lastValue - prevValue;
-    if (prevValue !== 0) {
-      const percent = Math.abs((diff / prevValue) * 100).toFixed(1);
-      trend = { value: Math.abs(diff), isUp: diff > 0, text: `${diff > 0 ? '+' : ''}${percent}%` };
-    } else if (diff !== 0) {
-      trend = { value: Math.abs(diff), isUp: diff > 0, text: `${diff > 0 ? '+' : ''}${diff}` };
-    }
-  }
 
   return (
     <motion.div
@@ -171,18 +157,8 @@ function MetricCard({ metric, onClick, onRefresh, isWarRoom }: MetricCardProps) 
       }`}
       id={`card-${metric.id}`}
     >
-      {trend && (
-        <div className={`absolute top-1 right-1 flex items-center gap-0.5 px-1 py-0.5 rounded-full text-[7px] font-black transition-colors duration-500 ${
-          trend.isUp 
-          ? (isWarRoom ? 'bg-red-950/50 text-red-500' : 'bg-red-50 text-red-600') 
-          : (isWarRoom ? 'bg-emerald-950/50 text-emerald-500' : 'bg-emerald-50 text-emerald-600')
-        }`}>
-          {trend.isUp ? <TrendingUp className="w-1.5 h-1.5" /> : <TrendingDown className="w-1.5 h-1.5" />}
-          {trend.text}
-        </div>
-      )}
       <header className="w-full text-center">
-        <h3 className={`text-[8px] font-bold uppercase tracking-wide truncate py-1 transition-colors duration-500 ${trend ? 'pl-1 pr-8' : 'px-1'} ${isWarRoom ? 'text-slate-300' : 'text-slate-700'}`}>
+        <h3 className={`text-[8px] font-bold uppercase tracking-wide truncate py-1 transition-colors duration-500 px-1 ${isWarRoom ? 'text-slate-300' : 'text-slate-700'}`}>
           {metric.title}
         </h3>
         <div className={`h-px w-3/4 mx-auto transition-colors duration-500 ${isWarRoom ? 'bg-slate-800' : 'bg-slate-200'}`} />
