@@ -67,7 +67,7 @@ function useScrollIndicator(ref: RefObject<HTMLDivElement | null>) {
   return scrollInfo;
 }
 
-function Countdown({ metric, onRefresh }: { metric: Metric, onRefresh?: (m: Metric) => void }) {
+function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, onRefresh?: (m: Metric) => void, hideUI?: boolean, className?: string }) {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   useEffect(() => {
@@ -93,8 +93,9 @@ function Countdown({ metric, onRefresh }: { metric: Metric, onRefresh?: (m: Metr
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [metric.lastUpdateAt, metric.refreshInterval, metric.id]);
+  }, [metric.lastUpdateAt, metric.refreshInterval, metric.id, onRefresh]);
 
+  if (hideUI) return null;
   if (timeLeft === null || !metric.refreshInterval) return null;
 
   const mins = Math.floor(timeLeft / 60);
@@ -102,7 +103,7 @@ function Countdown({ metric, onRefresh }: { metric: Metric, onRefresh?: (m: Metr
   const isUrgent = timeLeft < 30;
 
   return (
-    <div className={`flex items-center gap-1 text-[8px] font-black transition-colors duration-500 ${isUrgent ? 'text-red-500 animate-pulse' : 'text-slate-400'}`}>
+    <div className={`${className || 'flex items-center gap-1 text-[8px] font-black transition-colors duration-500'} ${isUrgent ? 'text-red-500 animate-pulse' : 'text-slate-400'}`}>
       <RefreshCcw className={`w-2 h-2 ${isUrgent ? 'animate-spin' : ''}`} />
       <span>{mins}:{secs < 10 ? '0' : ''}{secs}s</span>
     </div>
@@ -192,13 +193,13 @@ function MetricCard({ metric, onClick, onRefresh, isWarRoom }: MetricCardProps) 
           {metric.value}
         </span>
         
-        <div className={`relative group/icon flex items-center justify-center min-h-[40px] rounded-full transition-colors duration-500 ${isWarRoom ? 'bg-slate-800/50' : 'bg-transparent'}`}>
+        <div className={`relative group/icon flex items-center justify-center min-h-[52px] rounded-full transition-colors duration-500 ${isWarRoom ? 'bg-slate-800/50' : 'bg-transparent'}`}>
           {metric.status === 'ok' ? (
             <motion.div 
               whileHover={{ scale: 1.1 }}
               transition={{ type: "spring", stiffness: 400, damping: 10 }}
             >
-              <CheckCircle2 className="w-8 h-8 text-emerald-500" strokeWidth={2.5} />
+              <CheckCircle2 className="w-12 h-12 text-emerald-500" strokeWidth={2.5} />
             </motion.div>
           ) : (
             <motion.div
@@ -213,7 +214,7 @@ function MetricCard({ metric, onClick, onRefresh, isWarRoom }: MetricCardProps) 
               style={{ filter: isWarRoom ? "drop-shadow(0 0 8px rgba(255, 0, 0, 0.4))" : "drop-shadow(0 0 6px rgba(204, 0, 0, 0.25))" }}
               whileHover={{ scale: 1.25 }}
             >
-              <XCircle className={`w-8 h-8 ${isWarRoom ? 'text-red-500' : 'text-brand-red'}`} strokeWidth={2.5} />
+              <XCircle className={`w-12 h-12 ${isWarRoom ? 'text-red-500' : 'text-brand-red'}`} strokeWidth={2.5} />
             </motion.div>
           )}
         </div>
@@ -229,7 +230,7 @@ function MetricCard({ metric, onClick, onRefresh, isWarRoom }: MetricCardProps) 
           />
         )}
 
-        <div className="flex items-center justify-center gap-1 mt-1.5 flex-wrap">
+        <div className="flex items-center justify-center gap-1 mt-1.5">
           <div className="flex items-center gap-1">
             <Clock className={`w-2 h-2 ${isWarRoom ? 'text-slate-600' : 'text-slate-300'}`} />
             <span className={`text-[8px] font-bold tracking-tighter transition-colors duration-500 ${isWarRoom ? 'text-slate-500' : 'text-slate-400'}`}>
@@ -237,9 +238,7 @@ function MetricCard({ metric, onClick, onRefresh, isWarRoom }: MetricCardProps) 
             </span>
           </div>
           
-          <div className={`w-px h-2 mx-1 ${isWarRoom ? 'bg-slate-800' : 'bg-slate-200'}`} />
-
-          <Countdown metric={metric} onRefresh={onRefresh} />
+          <Countdown metric={metric} onRefresh={onRefresh} hideUI />
         </div>
       </footer>
 
@@ -340,7 +339,7 @@ function SectionContainer({ section, onCardClick, onCardRefresh, isWarRoom }: { 
   );
 }
 
-function DivergenceModal({ metric, onClose }: { metric: Metric, onClose: () => void }) {
+function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClose: () => void, onRefresh?: (m: Metric) => void }) {
   const [activeTab, setActiveTab] = useState<'table' | 'objective' | 'rules' | 'trend'>('table');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -421,9 +420,20 @@ function DivergenceModal({ metric, onClose }: { metric: Metric, onClose: () => v
               <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight italic">
                 Detalhes: <span className="text-brand-red">{metric.title}</span>
               </h2>
-              <p className="text-[10px] font-bold text-slate-500 uppercase">
-                Variações Identificadas - {metric.lastUpdate}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">
+                  Variações Identificadas - {metric.lastUpdate}
+                </p>
+                {metric.refreshInterval && (
+                  <>
+                    <div className="w-px h-3 bg-slate-200" />
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Próxima atualização em:</span>
+                      <Countdown metric={metric} onRefresh={onRefresh} className="flex items-center gap-1 text-[10px] font-black" />
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1139,6 +1149,7 @@ export default function App() {
           <DivergenceModal 
             metric={selectedMetric} 
             onClose={() => setSelectedMetric(null)} 
+            onRefresh={refreshSingleMetric}
           />
         )}
       </AnimatePresence>
