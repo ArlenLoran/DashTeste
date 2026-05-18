@@ -77,12 +77,14 @@ export async function ensureSharePointConfig() {
       await spListEnsureNumberField(LIST_CARDS, "OrderIndex");
       await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
       await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
+      await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
       await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
       await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
     } else {
       // Ensure new fields on existing list
       await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
       await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
+      await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
     }
   }
 }
@@ -108,20 +110,33 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
       title: div.Title,
       metrics: cards
         .filter((c: any) => c.DivisionId === div.Id)
-        .map((c: any) => ({
-          id: String(c.Id),
-          title: c.Title,
-          value: 0,
-          status: 'ok' as const,
-          lastUpdate: c.LastUpdateDate ? new Date(c.LastUpdateDate).toLocaleString('pt-BR') : 'Não atualizado',
-          lastUpdateAt: c.LastUpdateDate || undefined,
-          refreshInterval: c.RefreshInterval || 5, // Default 5 mins
-          isDynamic: true,
-          objective: c.Objective,
-          sqlQuery: c.SqlQuery, // Persist query to fetch later
-          history: [],
-          details: []
-        }))
+        .map((c: any) => {
+          let cachedDetails: any[] = [];
+          let cachedValue: number = 0;
+          if (c.CachedData) {
+            try {
+              cachedDetails = JSON.parse(c.CachedData);
+              cachedValue = Array.isArray(cachedDetails) ? cachedDetails.length : 0;
+            } catch (e) {
+              console.error("Error parsing cached data for metric", c.Id, e);
+            }
+          }
+
+          return {
+            id: String(c.Id),
+            title: c.Title,
+            value: cachedValue,
+            status: (cachedValue > 0 ? 'error' : 'ok') as 'error' | 'ok',
+            lastUpdate: c.LastUpdateDate ? new Date(c.LastUpdateDate).toLocaleString('pt-BR') : 'Não atualizado',
+            lastUpdateAt: c.LastUpdateDate || undefined,
+            refreshInterval: c.RefreshInterval || 5, // Default 5 mins
+            isDynamic: true,
+            objective: c.Objective,
+            sqlQuery: c.SqlQuery, // Persist query to fetch later
+            history: [],
+            details: cachedDetails
+          };
+        })
     }));
 
     return sections;
@@ -131,14 +146,18 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
   }
 }
 
-export async function saveMetricLastUpdate(metricId: string, dateIso: string) {
+export async function saveMetricData(metricId: string, dateIso: string, data?: any) {
   if (!hasSpContext()) return;
   try {
-    await spListUpdateItem(LIST_CARDS, Number(metricId), {
+    const fields: any = {
       LastUpdateDate: dateIso
-    });
+    };
+    if (data !== undefined) {
+      fields.CachedData = JSON.stringify(data);
+    }
+    await spListUpdateItem(LIST_CARDS, Number(metricId), fields);
   } catch (err) {
-    console.error("Error saving last update to SP:", err);
+    console.error("Error saving metric data to SP:", err);
   }
 }
 

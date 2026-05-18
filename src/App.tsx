@@ -24,7 +24,7 @@ import {
 import type { Section, Metric, MetricHistory } from './types';
 
 import { postSqlQuery } from './services/queryService';
-import { ensureSharePointConfig, fetchDashboardConfig, saveMetricLastUpdate } from './services/configService';
+import { ensureSharePointConfig, fetchDashboardConfig, saveMetricData } from './services/configService';
 
 interface MetricCardProps {
   metric: Metric;
@@ -814,12 +814,19 @@ export default function App() {
     data.forEach((section, sIdx) => {
       section.metrics.forEach((metric, mIdx) => {
         if (metric.sqlQuery) {
-          fetchPromises.push({
-            promise: postSqlQuery(metric.sqlQuery, metric.id),
-            sectionIdx: sIdx,
-            metricIdx: mIdx,
-            metric: metric
-          });
+          const now = new Date().getTime();
+          const last = metric.lastUpdateAt ? new Date(metric.lastUpdateAt).getTime() : 0;
+          const interval = (metric.refreshInterval || 5) * 60000;
+          const needsUpdate = forceResetTimers || !metric.lastUpdateAt || (now - last) >= interval;
+
+          if (needsUpdate) {
+            fetchPromises.push({
+              promise: postSqlQuery(metric.sqlQuery, metric.id),
+              sectionIdx: sIdx,
+              metricIdx: mIdx,
+              metric: metric
+            });
+          }
         }
       });
     });
@@ -835,7 +842,7 @@ export default function App() {
       const nowIso = now.toISOString();
       const nowString = now.toLocaleString('pt-BR');
       
-      const metricsToUpdate: { id: string, iso: string }[] = [];
+      const metricsToUpdate: { id: string, iso: string, result: any }[] = [];
 
       setData(current => {
         const updated = [...current];
@@ -843,29 +850,24 @@ export default function App() {
           const { sectionIdx, metricIdx, metric } = fetchPromises[i];
           if (updated[sectionIdx] && updated[sectionIdx].metrics[metricIdx]) {
             const rowCount = Array.isArray(result) ? result.length : 0;
-            const shouldUpdateTimestamp = forceResetTimers || !metric.lastUpdateAt;
             
             updated[sectionIdx].metrics[metricIdx] = {
               ...updated[sectionIdx].metrics[metricIdx],
               value: rowCount,
               details: Array.isArray(result) ? result : [],
               status: rowCount > 0 ? 'error' : 'ok',
-              ...(shouldUpdateTimestamp ? {
-                lastUpdate: nowString,
-                lastUpdateAt: nowIso
-              } : {})
+              lastUpdate: nowString,
+              lastUpdateAt: nowIso
             };
 
-            if (shouldUpdateTimestamp) {
-              metricsToUpdate.push({ id: metric.id, iso: nowIso });
-            }
+            metricsToUpdate.push({ id: metric.id, iso: nowIso, result });
           }
         });
         return updated;
       });
 
       // Persist to SP (outside of state setter)
-      metricsToUpdate.forEach(m => saveMetricLastUpdate(m.id, m.iso));
+      metricsToUpdate.forEach(m => saveMetricData(m.id, m.iso, m.result));
       
       setEventLog(prev => [{
         id: Math.random().toString(36).substr(2, 9),
@@ -926,7 +928,7 @@ export default function App() {
       });
 
       // Persist to SP
-      saveMetricLastUpdate(metric.id, nowIso);
+      saveMetricData(metric.id, nowIso, result);
 
       setEventLog(prev => [{
         id: Math.random().toString(36).substr(2, 9),

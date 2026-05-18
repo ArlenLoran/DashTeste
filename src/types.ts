@@ -19,6 +19,7 @@ export interface Metric {
   details?: any[];
   isDynamic?: boolean;
   sqlQuery?: string;
+  cachedData?: string;
 }
 
 export interface Section {
