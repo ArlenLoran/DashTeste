@@ -3,9 +3,11 @@ import {
   spListExists, 
   spCreateList, 
   spListEnsureNumberField, 
+  spListEnsureTextField,
   spListEnsureMultiLineTextField,
   spListGetItems,
-  spListAddItem
+  spListAddItem,
+  spListUpdateItem
 } from './spService';
 import { SQL_QUERY_ESTOQUE, SQL_QUERY_VALIDACAO_SISTEMICA, SQL_QUERY_SEPARACAO_SALDO } from './queryService';
 import { Section, Metric } from '../types';
@@ -33,6 +35,8 @@ export async function ensureSharePointConfig() {
       await spCreateList(LIST_CARDS);
       await spListEnsureNumberField(LIST_CARDS, "DivisionId");
       await spListEnsureNumberField(LIST_CARDS, "OrderIndex");
+      await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
+      await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
       await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
       await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
 
@@ -43,6 +47,7 @@ export async function ensureSharePointConfig() {
           DivisionId: div1.data.id,
           SqlQuery: SQL_QUERY_SEPARACAO_SALDO,
           Objective: "Consulta dinâmica de separação de saldo.",
+          RefreshInterval: 5,
           OrderIndex: 1
         });
         await spListAddItem(LIST_CARDS, {
@@ -50,6 +55,7 @@ export async function ensureSharePointConfig() {
           DivisionId: div2.data.id,
           SqlQuery: SQL_QUERY_VALIDACAO_SISTEMICA,
           Objective: "Consulta dinâmica de validação sistêmica.",
+          RefreshInterval: 5,
           OrderIndex: 1
         });
         await spListAddItem(LIST_CARDS, {
@@ -57,6 +63,7 @@ export async function ensureSharePointConfig() {
           DivisionId: div3.data.id,
           SqlQuery: SQL_QUERY_ESTOQUE,
           Objective: "Consulta dinâmica de estoque via validação sistêmica.",
+          RefreshInterval: 10,
           OrderIndex: 1
         });
       }
@@ -68,8 +75,14 @@ export async function ensureSharePointConfig() {
       await spCreateList(LIST_CARDS);
       await spListEnsureNumberField(LIST_CARDS, "DivisionId");
       await spListEnsureNumberField(LIST_CARDS, "OrderIndex");
+      await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
+      await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
       await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
       await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
+    } else {
+      // Ensure new fields on existing list
+      await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
+      await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
     }
   }
 }
@@ -100,7 +113,9 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
           title: c.Title,
           value: 0,
           status: 'ok' as const,
-          lastUpdate: new Date().toLocaleString('pt-BR'),
+          lastUpdate: c.LastUpdateDate ? new Date(c.LastUpdateDate).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR'),
+          lastUpdateAt: c.LastUpdateDate || new Date().toISOString(),
+          refreshInterval: c.RefreshInterval || 5, // Default 5 mins
           isDynamic: true,
           objective: c.Objective,
           sqlQuery: c.SqlQuery, // Persist query to fetch later
@@ -116,13 +131,27 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
   }
 }
 
+export async function saveMetricLastUpdate(metricId: string, dateIso: string) {
+  if (!hasSpContext()) return;
+  try {
+    await spListUpdateItem(LIST_CARDS, Number(metricId), {
+      LastUpdateDate: dateIso
+    });
+  } catch (err) {
+    console.error("Error saving last update to SP:", err);
+  }
+}
+
 function getLocalConfig(): Section[] {
   return [
     {
       title: "Separação de saldo",
       metrics: [
         { 
-          id: '3', title: "Separação de saldo", value: 0, status: 'ok', lastUpdate: new Date().toLocaleString('pt-BR'),
+          id: '3', title: "Separação de saldo", value: 0, status: 'ok', 
+          lastUpdate: new Date().toLocaleString('pt-BR'),
+          lastUpdateAt: new Date().toISOString(),
+          refreshInterval: 5,
           isDynamic: true,
           sqlQuery: SQL_QUERY_SEPARACAO_SALDO,
           objective: "Consulta dinâmica de separação de saldo.",
@@ -135,7 +164,10 @@ function getLocalConfig(): Section[] {
       title: "Validação sistêmica",
       metrics: [
         { 
-          id: '2', title: "Validação sistemica", value: 0, status: 'ok', lastUpdate: new Date().toLocaleString('pt-BR'),
+          id: '2', title: "Validação sistemica", value: 0, status: 'ok', 
+          lastUpdate: new Date().toLocaleString('pt-BR'),
+          lastUpdateAt: new Date().toISOString(),
+          refreshInterval: 5,
           isDynamic: true,
           sqlQuery: SQL_QUERY_VALIDACAO_SISTEMICA,
           objective: "Consulta dinâmica de validação sistêmica.",
@@ -148,7 +180,10 @@ function getLocalConfig(): Section[] {
       title: "Qualidade operacional",
       metrics: [
         { 
-          id: '1', title: "Estoque da validação sistemica", value: 0, status: 'ok', lastUpdate: new Date().toLocaleString('pt-BR'),
+          id: '1', title: "Estoque da validação sistemica", value: 0, status: 'ok', 
+          lastUpdate: new Date().toLocaleString('pt-BR'),
+          lastUpdateAt: new Date().toISOString(),
+          refreshInterval: 10,
           isDynamic: true,
           sqlQuery: SQL_QUERY_ESTOQUE,
           objective: "Consulta dinâmica de estoque via validação sistêmica.",

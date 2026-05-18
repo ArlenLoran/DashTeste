@@ -24,9 +24,15 @@ import {
 import type { Section, Metric, MetricHistory } from './types';
 
 import { postSqlQuery } from './services/queryService';
-import { ensureSharePointConfig, fetchDashboardConfig } from './services/configService';
+import { ensureSharePointConfig, fetchDashboardConfig, saveMetricLastUpdate } from './services/configService';
 
-
+interface MetricCardProps {
+  metric: Metric;
+  onClick?: (metric: Metric) => void;
+  onRefresh?: (metric: Metric) => void;
+  isWarRoom?: boolean;
+  key?: string | number;
+}
 
 function useScrollIndicator(ref: RefObject<HTMLDivElement | null>) {
   const [scrollInfo, setScrollInfo] = useState({ percentage: 0, ratio: 0, isScrollable: false });
@@ -61,11 +67,46 @@ function useScrollIndicator(ref: RefObject<HTMLDivElement | null>) {
   return scrollInfo;
 }
 
-interface MetricCardProps {
-  metric: Metric;
-  onClick?: (metric: Metric) => void;
-  isWarRoom?: boolean;
-  key?: string;
+function Countdown({ metric, onRefresh }: { metric: Metric, onRefresh?: (m: Metric) => void }) {
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!metric.lastUpdateAt || !metric.refreshInterval || !onRefresh) return;
+
+    const calculate = () => {
+      const now = new Date();
+      const last = new Date(metric.lastUpdateAt!);
+      const next = new Date(last.getTime() + metric.refreshInterval! * 60000);
+      const diff = Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
+      return diff;
+    };
+
+    const initial = calculate();
+    setTimeLeft(initial);
+
+    const timer = setInterval(() => {
+      const remaining = calculate();
+      setTimeLeft(remaining);
+      if (remaining <= 0) {
+        onRefresh(metric);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [metric.lastUpdateAt, metric.refreshInterval, metric.id]);
+
+  if (timeLeft === null || !metric.refreshInterval) return null;
+
+  const mins = Math.floor(timeLeft / 60);
+  const secs = timeLeft % 60;
+  const isUrgent = timeLeft < 30;
+
+  return (
+    <div className={`flex items-center gap-1 text-[8px] font-black transition-colors duration-500 ${isUrgent ? 'text-red-500 animate-pulse' : 'text-slate-400'}`}>
+      <RefreshCcw className={`w-2 h-2 ${isUrgent ? 'animate-spin' : ''}`} />
+      <span>{mins}:{secs < 10 ? '0' : ''}{secs}s</span>
+    </div>
+  );
 }
 
 function MiniSparkline({ data, color }: { data: MetricHistory[], color: string }) {
@@ -95,7 +136,7 @@ function MiniSparkline({ data, color }: { data: MetricHistory[], color: string }
   );
 }
 
-function MetricCard({ metric, onClick, isWarRoom }: MetricCardProps) {
+function MetricCard({ metric, onClick, onRefresh, isWarRoom }: MetricCardProps) {
   const hasHistory = metric.history && metric.history.length > 1;
   let trend: { value: number; isUp: boolean; text: string } | null = null;
   
@@ -188,11 +229,17 @@ function MetricCard({ metric, onClick, isWarRoom }: MetricCardProps) {
           />
         )}
 
-        <div className="flex items-center justify-center gap-1 mt-1.5">
-          <Clock className={`w-2 h-2 ${isWarRoom ? 'text-slate-600' : 'text-slate-300'}`} />
-          <span className={`text-[8px] font-bold tracking-tighter transition-colors duration-500 ${isWarRoom ? 'text-slate-500' : 'text-slate-400'}`}>
-            {metric.lastUpdate}
-          </span>
+        <div className="flex items-center justify-center gap-1 mt-1.5 flex-wrap">
+          <div className="flex items-center gap-1">
+            <Clock className={`w-2 h-2 ${isWarRoom ? 'text-slate-600' : 'text-slate-300'}`} />
+            <span className={`text-[8px] font-bold tracking-tighter transition-colors duration-500 ${isWarRoom ? 'text-slate-500' : 'text-slate-400'}`}>
+              {metric.lastUpdate}
+            </span>
+          </div>
+          
+          <div className={`w-px h-2 mx-1 ${isWarRoom ? 'bg-slate-800' : 'bg-slate-200'}`} />
+
+          <Countdown metric={metric} onRefresh={onRefresh} />
         </div>
       </footer>
 
@@ -203,7 +250,7 @@ function MetricCard({ metric, onClick, isWarRoom }: MetricCardProps) {
   );
 }
 
-function SectionContainer({ section, onCardClick, isWarRoom }: { section: Section, onCardClick: (metric: Metric) => void, isWarRoom: boolean }) {
+function SectionContainer({ section, onCardClick, onCardRefresh, isWarRoom }: { section: Section, onCardClick: (metric: Metric) => void, onCardRefresh: (metric: Metric) => void, isWarRoom: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { percentage, ratio, isScrollable } = useScrollIndicator(scrollRef);
   const scrollInterval = useRef<NodeJS.Timeout | null>(null);
@@ -249,7 +296,7 @@ function SectionContainer({ section, onCardClick, isWarRoom }: { section: Sectio
           className="overflow-x-auto pb-4 scrollbar-hide flex gap-6 scroll-smooth px-4 w-full justify-start"
         >
           {section.metrics.map((metric) => (
-            <MetricCard key={metric.id} metric={metric} onClick={onCardClick} isWarRoom={isWarRoom} />
+            <MetricCard key={metric.id} metric={metric} onClick={onCardClick} onRefresh={onCardRefresh} isWarRoom={isWarRoom} />
           ))}
         </div>
         
@@ -831,6 +878,50 @@ export default function App() {
     fetchAllData();
   };
 
+  const refreshSingleMetric = async (metric: Metric) => {
+    if (!metric.sqlQuery || isRefreshing) return;
+    
+    try {
+      const result = await postSqlQuery(metric.sqlQuery, metric.id);
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const nowString = now.toLocaleString('pt-BR');
+      const rowCount = Array.isArray(result) ? result.length : 0;
+
+      setData(current => {
+        const updated = [...current];
+        for (let sIdx = 0; sIdx < updated.length; sIdx++) {
+          const mIdx = updated[sIdx].metrics.findIndex(m => m.id === metric.id);
+          if (mIdx !== -1) {
+            updated[sIdx].metrics[mIdx] = {
+              ...updated[sIdx].metrics[mIdx],
+              value: rowCount,
+              details: Array.isArray(result) ? result : [],
+              lastUpdate: nowString,
+              lastUpdateAt: nowIso,
+              status: rowCount > 0 ? 'error' : 'ok'
+            };
+            break;
+          }
+        }
+        return updated;
+      });
+
+      // Persist to SP
+      saveMetricLastUpdate(metric.id, nowIso);
+
+      setEventLog(prev => [{
+        id: Math.random().toString(36).substr(2, 9),
+        message: `Card "${metric.title}" atualizado automaticamente.`,
+        time: now.toLocaleTimeString('pt-BR'),
+        type: 'success'
+      }, ...prev].slice(0, 50));
+
+    } catch (err) {
+      console.error(`Auto-refresh error for metric ${metric.id}:`, err);
+    }
+  };
+
   const totalDivergences = data.reduce((acc, section) => acc + section.metrics.reduce((mAcc, m) => mAcc + m.value, 0), 0);
   const criticalMetrics = data.reduce((acc, section) => acc + section.metrics.filter(m => m.status === 'error').length, 0);
 
@@ -1011,7 +1102,12 @@ export default function App() {
                 flexShrink: 0
               }}
             >
-              <SectionContainer section={section} onCardClick={setSelectedMetric} isWarRoom={isWarRoom} />
+              <SectionContainer 
+                section={section} 
+                onCardClick={setSelectedMetric} 
+                onCardRefresh={refreshSingleMetric}
+                isWarRoom={isWarRoom} 
+              />
             </motion.div>
           ))}
         </AnimatePresence>

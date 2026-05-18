@@ -11,6 +11,8 @@ export interface Metric {
   value: number | string;
   status: Status;
   lastUpdate: string;
+  lastUpdateAt?: string; // ISO string for precise calculation
+  refreshInterval?: number; // in minutes
   objective?: string;
   rules?: string[];
   history?: MetricHistory[];
