@@ -15,7 +15,7 @@ export interface Metric {
   refreshInterval?: number; // in minutes
   objective?: string;
   rules?: string[];
-  history?: MetricHistory[];
+  history?: number[];
   details?: any[];
   isDynamic?: boolean;
   sqlQuery?: string;

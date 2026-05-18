@@ -142,8 +142,8 @@ function MetricCard({ metric, onClick, onRefresh, isWarRoom }: MetricCardProps) 
   let trend: { value: number; isUp: boolean; text: string } | null = null;
   
   if (hasHistory) {
-    const lastValue = metric.history![metric.history!.length - 1].value;
-    const prevValue = metric.history![metric.history!.length - 2].value;
+    const lastValue = metric.history![0];
+    const prevValue = metric.history![1];
     const diff = lastValue - prevValue;
     if (prevValue !== 0) {
       const percent = Math.abs((diff / prevValue) * 100).toFixed(1);
@@ -225,7 +225,7 @@ function MetricCard({ metric, onClick, onRefresh, isWarRoom }: MetricCardProps) 
         
         {metric.history && metric.history.length > 2 && (
           <MiniSparkline 
-            data={metric.history} 
+            data={metric.history.map((val, idx) => ({ value: val, timestamp: String(idx) }))} 
             color={metric.status === 'ok' ? '#10b981' : '#ef4444'} 
           />
         )}
@@ -700,11 +700,14 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
                 {metric.history && metric.history.length > 0 ? (
                   <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm h-[350px] relative">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={metric.history.map((val, idx) => ({ value: val, time: `T-${metric.history!.length - idx - 1}h` }))}>
+                      <AreaChart data={[...metric.history].reverse().map((val, idx) => ({ 
+                        value: val, 
+                        time: idx === metric.history!.length - 1 ? 'Agora' : `v-${metric.history!.length - idx - 1}` 
+                      }))}>
                         <defs>
                           <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#cc0000" stopOpacity={0.1}/>
-                            <stop offset="95%" stopColor="#cc0000" stopOpacity={0}/>
+                            <stop offset="5%" stopColor={metric.status === 'error' ? "#cc0000" : "#10b981"} stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor={metric.status === 'error' ? "#cc0000" : "#10b981"} stopOpacity={0}/>
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -732,7 +735,7 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
                         <Area 
                           type="monotone" 
                           dataKey="value" 
-                          stroke="#cc0000" 
+                          stroke={metric.status === 'error' ? "#cc0000" : "#10b981"} 
                           strokeWidth={4} 
                           fillOpacity={1} 
                           fill="url(#colorValue)" 
@@ -751,13 +754,13 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Média</p>
                     <p className="text-lg font-black text-slate-800">
-                      {metric.history ? (metric.history.reduce((acc, curr) => acc + curr.value, 0) / metric.history.length).toFixed(1) : '0'}
+                      {metric.history && metric.history.length > 0 ? (metric.history.reduce((acc, curr) => acc + curr, 0) / metric.history.length).toFixed(1) : '0'}
                     </p>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Pico</p>
                     <p className="text-lg font-black text-slate-800">
-                      {metric.history ? Math.max(...metric.history.map(h => h.value)) : '0'}
+                      {metric.history && metric.history.length > 0 ? Math.max(...metric.history) : '0'}
                     </p>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
@@ -853,32 +856,37 @@ export default function App() {
       const nowIso = now.toISOString();
       const nowString = now.toLocaleString('pt-BR');
       
-      const metricsToUpdate: { id: string, iso: string, result: any }[] = [];
+      const metricsToUpdate: { id: string, iso: string, result: any, history: number[] }[] = [];
 
       setData(current => {
         const updated = [...current];
         results.forEach((result, i) => {
           const { sectionIdx, metricIdx, metric } = fetchPromises[i];
           if (updated[sectionIdx] && updated[sectionIdx].metrics[metricIdx]) {
+            const currentMetric = updated[sectionIdx].metrics[metricIdx];
             const rowCount = Array.isArray(result) ? result.length : 0;
             
+            // Update history: new value at the beginning, max 10
+            const newHistory = [rowCount, ...(currentMetric.history || [])].slice(0, 10);
+
             updated[sectionIdx].metrics[metricIdx] = {
-              ...updated[sectionIdx].metrics[metricIdx],
+              ...currentMetric,
               value: rowCount,
               details: Array.isArray(result) ? result : [],
               status: rowCount > 0 ? 'error' : 'ok',
               lastUpdate: nowString,
-              lastUpdateAt: nowIso
+              lastUpdateAt: nowIso,
+              history: newHistory
             };
 
-            metricsToUpdate.push({ id: metric.id, iso: nowIso, result });
+            metricsToUpdate.push({ id: metric.id, iso: nowIso, result, history: newHistory });
           }
         });
         return updated;
       });
 
       // Persist to SP (outside of state setter)
-      metricsToUpdate.forEach(m => saveMetricData(m.id, m.iso, m.result));
+      metricsToUpdate.forEach(m => saveMetricData(m.id, m.iso, m.result, m.history));
       
       setEventLog(prev => [{
         id: Math.random().toString(36).substr(2, 9),
@@ -918,19 +926,25 @@ export default function App() {
       const nowIso = now.toISOString();
       const nowString = now.toLocaleString('pt-BR');
       const rowCount = Array.isArray(result) ? result.length : 0;
+      
+      let updatedHistory: number[] = [];
 
       setData(current => {
         const updated = [...current];
         for (let sIdx = 0; sIdx < updated.length; sIdx++) {
           const mIdx = updated[sIdx].metrics.findIndex(m => m.id === metric.id);
           if (mIdx !== -1) {
+            const currentMetric = updated[sIdx].metrics[mIdx];
+            updatedHistory = [rowCount, ...(currentMetric.history || [])].slice(0, 10);
+
             updated[sIdx].metrics[mIdx] = {
-              ...updated[sIdx].metrics[mIdx],
+              ...currentMetric,
               value: rowCount,
               details: Array.isArray(result) ? result : [],
               lastUpdate: nowString,
               lastUpdateAt: nowIso,
-              status: rowCount > 0 ? 'error' : 'ok'
+              status: rowCount > 0 ? 'error' : 'ok',
+              history: updatedHistory
             };
             break;
           }
@@ -939,7 +953,7 @@ export default function App() {
       });
 
       // Persist to SP
-      saveMetricData(metric.id, nowIso, result);
+      saveMetricData(metric.id, nowIso, result, updatedHistory);
 
       setEventLog(prev => [{
         id: Math.random().toString(36).substr(2, 9),

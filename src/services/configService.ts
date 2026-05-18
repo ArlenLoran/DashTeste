@@ -40,6 +40,7 @@ export async function ensureSharePointConfig() {
       await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
       await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
       await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
+      await spListEnsureTextField(LIST_CARDS, "HistoryData");
 
       // Seed initial cards mapping to the seeded divisions
       if (div1.status && div2.status && div3.status) {
@@ -106,6 +107,7 @@ export async function ensureSharePointConfig() {
       // Ensure new fields on existing list
       await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
       await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
+      await spListEnsureTextField(LIST_CARDS, "HistoryData");
       await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
     }
 
@@ -157,6 +159,12 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
             .filter((r: any) => Number(r.CardId) === Number(c.Id))
             .map((r: any) => r.Title);
 
+          // History from comma separated string
+          let history: number[] = [];
+          if (c.HistoryData) {
+            history = c.HistoryData.split(',').map(Number).filter((n: any) => !isNaN(n));
+          }
+
           return {
             id: String(c.Id),
             title: c.Title,
@@ -168,7 +176,7 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
             isDynamic: true,
             objective: c.Objective,
             sqlQuery: c.SqlQuery, // Persist query to fetch later
-            history: [],
+            history: history,
             details: cachedDetails,
             rules: cardRules
           };
@@ -182,7 +190,7 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
   }
 }
 
-export async function saveMetricData(metricId: string, dateIso: string, data?: any) {
+export async function saveMetricData(metricId: string, dateIso: string, data?: any, history?: number[]) {
   if (!hasSpContext()) return;
   try {
     const fields: any = {
@@ -190,6 +198,9 @@ export async function saveMetricData(metricId: string, dateIso: string, data?: a
     };
     if (data !== undefined) {
       fields.CachedData = JSON.stringify(data);
+    }
+    if (history !== undefined) {
+      fields.HistoryData = history.join(',');
     }
     await spListUpdateItem(LIST_CARDS, Number(metricId), fields);
   } catch (err) {
