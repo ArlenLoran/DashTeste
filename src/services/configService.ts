@@ -238,7 +238,8 @@ export async function updateMetric(id: string, metric: Partial<Metric>) {
     Title: metric.title,
     SqlQuery: metric.sqlQuery,
     Objective: metric.objective,
-    RefreshInterval: metric.refreshInterval
+    RefreshInterval: metric.refreshInterval,
+    LastUpdateDate: metric.lastUpdateAt || new Date().toISOString()
   };
   const res = await spListUpdateItem(LIST_CARDS, Number(id), fields);
   if (!res.status) throw new Error(res.message);
@@ -337,7 +338,25 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
 }
 
 export async function saveMetricData(metricId: string, dateIso: string, data?: any, history?: number[]) {
-  if (!hasSpContext()) return;
+  if (!hasSpContext()) {
+    const sections = getLocalConfigFromStorage();
+    sections.forEach(s => {
+      const mIdx = s.metrics.findIndex(m => m.id === metricId);
+      if (mIdx !== -1) {
+        s.metrics[mIdx] = { 
+          ...s.metrics[mIdx], 
+          lastUpdateAt: dateIso,
+          lastUpdate: new Date(dateIso).toLocaleString('pt-BR'),
+          details: data !== undefined ? data : s.metrics[mIdx].details,
+          history: history !== undefined ? history : s.metrics[mIdx].history,
+          value: data !== undefined && Array.isArray(data) ? data.length : s.metrics[mIdx].value,
+          status: data !== undefined && Array.isArray(data) && data.length > 0 ? 'error' : 'ok'
+        };
+      }
+    });
+    localStorage.setItem('dash_config_mock', JSON.stringify(sections));
+    return;
+  }
   try {
     const fields: any = {
       LastUpdateDate: dateIso

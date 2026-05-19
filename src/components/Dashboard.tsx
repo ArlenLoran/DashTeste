@@ -55,9 +55,13 @@ function useScrollIndicator(ref: RefObject<HTMLDivElement | null>) {
 
 function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, onRefresh?: (m: Metric) => void, hideUI?: boolean, className?: string }) {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const isRefreshingRef = useRef(false);
 
   useEffect(() => {
     if (!metric || !metric.lastUpdateAt || !metric.refreshInterval || !onRefresh) return;
+    
+    isRefreshingRef.current = false;
+
     const calculate = () => {
       const now = new Date();
       const last = new Date(metric.lastUpdateAt!);
@@ -66,16 +70,31 @@ function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, o
       const diff = Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
       return diff;
     };
+
     const initial = calculate();
     setTimeLeft(initial);
+    
+    // If we're already at zero, trigger refresh once
+    if (initial <= 0 && !isRefreshingRef.current) {
+      isRefreshingRef.current = true;
+      onRefresh(metric);
+    }
+
     const timer = setInterval(() => {
       const remaining = calculate();
       setTimeLeft(remaining);
-      if (remaining <= 0) {
+      if (remaining <= 0 && !isRefreshingRef.current) {
+        isRefreshingRef.current = true;
         onRefresh(metric);
+      } else if (remaining > 0) {
+        // Reset the flag if we have time again (meaning data updated)
+        isRefreshingRef.current = false;
       }
     }, 1000);
-    return () => clearInterval(timer);
+    
+    return () => {
+      clearInterval(timer);
+    };
   }, [metric.lastUpdateAt, metric.refreshInterval, metric.id]);
 
   if (hideUI) return null;
@@ -592,26 +611,29 @@ export function Dashboard() {
       const metricsToUpdate: any[] = [];
       
       setData(current => {
-        const updated = [...current];
-        results.forEach((res, i) => {
-          const { sectionIdx, metricIdx, metric } = fetchPromises[i];
-          // Ensure we are updating the right item in case 'current' is newer
-          if (updated[sectionIdx] && updated[sectionIdx].metrics[metricIdx]) {
-            const rowCount = Array.isArray(res) ? res.length : 0;
-            const updatedHistory = [rowCount, ...(metric.history || [])].slice(0, 10);
-            updated[sectionIdx].metrics[metricIdx] = {
-              ...updated[sectionIdx].metrics[metricIdx],
-              value: rowCount,
-              details: Array.isArray(res) ? res : [],
-              lastUpdate: nowString,
-              lastUpdateAt: nowIso,
-              status: rowCount > 0 ? 'error' : 'ok',
-              history: updatedHistory
-            };
-            metricsToUpdate.push({ id: metric.id, iso: nowIso, result: res, history: updatedHistory });
-          }
+        return current.map(section => {
+          const updatedMetrics = section.metrics.map(metric => {
+            const resultMatch = fetchPromises.find(p => p.metric.id === metric.id);
+            if (resultMatch) {
+              const res = results[fetchPromises.indexOf(resultMatch)];
+              const rowCount = Array.isArray(res) ? res.length : 0;
+              const updatedHistory = [rowCount, ...(metric.history || [])].slice(0, 10);
+              const updatedMetric = {
+                ...metric,
+                value: rowCount,
+                details: Array.isArray(res) ? res : [],
+                lastUpdate: nowString,
+                lastUpdateAt: nowIso,
+                status: (rowCount > 0 ? 'error' : 'ok') as 'error' | 'ok',
+                history: updatedHistory
+              };
+              metricsToUpdate.push({ id: metric.id, iso: nowIso, result: res, history: updatedHistory });
+              return updatedMetric;
+            }
+            return metric;
+          });
+          return { ...section, metrics: updatedMetrics };
         });
-        return updated;
       });
       metricsToUpdate.forEach(m => saveMetricData(m.id, m.iso, m.result, m.history));
       setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: "Sincronização completada com sucesso.", time: new Date().toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
@@ -636,18 +658,27 @@ export function Dashboard() {
       const nowIso = now.toISOString();
       const rowCount = Array.isArray(result) ? result.length : 0;
       let updatedHistory: number[] = [];
+
       setData(current => {
-        const updated = [...current];
-        for (let sIdx = 0; sIdx < updated.length; sIdx++) {
-          const mIdx = updated[sIdx].metrics.findIndex(m => Number(m.id) === Number(metric.id));
+        return current.map(section => {
+          const mIdx = section.metrics.findIndex(m => m.id === metric.id);
           if (mIdx !== -1) {
-            const currentMetric = updated[sIdx].metrics[mIdx];
+            const currentMetric = section.metrics[mIdx];
             updatedHistory = [rowCount, ...(currentMetric.history || [])].slice(0, 10);
-            updated[sIdx].metrics[mIdx] = { ...currentMetric, value: rowCount, details: Array.isArray(result) ? result : [], lastUpdate: now.toLocaleString('pt-BR'), lastUpdateAt: nowIso, status: rowCount > 0 ? 'error' : 'ok', history: updatedHistory };
-            break;
+            const updatedMetrics = [...section.metrics];
+            updatedMetrics[mIdx] = { 
+              ...currentMetric, 
+              value: rowCount, 
+              details: Array.isArray(result) ? result : [], 
+              lastUpdate: now.toLocaleString('pt-BR'), 
+              lastUpdateAt: nowIso, 
+              status: rowCount > 0 ? 'error' : 'ok', 
+              history: updatedHistory 
+            };
+            return { ...section, metrics: updatedMetrics };
           }
-        }
-        return updated;
+          return section;
+        });
       });
       saveMetricData(metric.id, nowIso, result, updatedHistory);
       setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `Card "${metric.title}" atualizado automaticamente.`, time: now.toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
