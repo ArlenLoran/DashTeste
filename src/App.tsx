@@ -13,10 +13,11 @@ import {
   CheckCircle2, XCircle, ChevronLeft, ChevronRight, RefreshCcw, 
   X, Info, Download, BookOpen, ShieldCheck, Search,
   TrendingUp, TrendingDown, Activity, Settings, LayoutGrid,
-  Clock, Bell, Triangle
+  Clock, Bell, Triangle, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
+import Markdown from 'react-markdown';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, LineChart, Line 
@@ -316,10 +317,39 @@ function SectionContainer({ section, onCardClick, onCardRefresh, isWarRoom }: { 
 }
 
 function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClose: () => void, onRefresh?: (m: Metric) => void }) {
-  const [activeTab, setActiveTab] = useState<'table' | 'objective' | 'rules' | 'trend'>('table');
+  const [activeTab, setActiveTab] = useState<'table' | 'objective' | 'rules' | 'trend' | 'ai'>('table');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const itemsPerPage = 10;
+  
+  const runAiAnalysis = async () => {
+    if (isAnalyzing) return;
+    setIsAnalyzing(true);
+    setActiveTab('ai');
+    try {
+      const resp = await fetch('/api/ai/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          metricTitle: metric.title,
+          objective: metric.objective,
+          rules: metric.rules,
+          data: metric.details,
+          history: metric.history
+        })
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      setAiAnalysis(data.analysis);
+    } catch (err: any) {
+      console.error("AI Analysis failed:", err);
+      setAiAnalysis(`### ❌ Erro na análise\nNão foi possível processar a análise no momento. Detalhes: ${err.message}`);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
   
   if (!metric) return null;
 
@@ -442,6 +472,14 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
                 title="Histórico Comparativo"
               >
                 <TrendingUp className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={runAiAnalysis}
+                className={`p-2 rounded-md transition-all ${activeTab === 'ai' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-500 hover:text-indigo-700'}`}
+                title="IA Analysis"
+                disabled={isAnalyzing}
+              >
+                <Sparkles className={`w-5 h-5 ${isAnalyzing ? 'animate-pulse' : ''}`} />
               </button>
             </div>
             
@@ -752,6 +790,78 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
                 </div>
               </motion.div>
             )}
+
+            {activeTab === 'ai' && (
+              <motion.div
+                key="ai"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-6"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl">
+                      <Sparkles className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-900 italic tracking-tighter uppercase">Inteligência Artificial</h3>
+                  </div>
+                  {aiAnalysis && (
+                    <button 
+                      onClick={runAiAnalysis}
+                      className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors"
+                      disabled={isAnalyzing}
+                    >
+                      <RefreshCcw className={`w-3 h-3 ${isAnalyzing ? 'animate-spin' : ''}`} />
+                      Refazer Análise
+                    </button>
+                  )}
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 min-h-[400px] relative overflow-y-auto max-h-[55vh]">
+                  {isAnalyzing ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+                      <div className="relative">
+                        <motion.div 
+                          animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                          className="absolute inset-0 bg-indigo-200 rounded-full blur-xl"
+                        />
+                        <Sparkles className="w-12 h-12 text-indigo-600 relative animate-bounce" />
+                      </div>
+                      <div>
+                        <p className="font-black text-slate-800 uppercase tracking-widest text-sm">Gerando Insights com Gemini</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 px-8">Isso pode levar alguns segundos enquanto analisamos padrões e regras...</p>
+                      </div>
+                    </div>
+                  ) : aiAnalysis ? (
+                    <div className="markdown-body prose prose-slate max-w-none prose-sm prose-headings:font-black prose-headings:uppercase prose-headings:italic prose-headings:tracking-tighter prose-p:text-slate-600 prose-p:font-medium prose-strong:text-slate-900">
+                      <Markdown>{aiAnalysis}</Markdown>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center py-12 gap-6">
+                      <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center shadow-inner">
+                        <Sparkles className="w-10 h-10 text-indigo-600" />
+                      </div>
+                      <div className="max-w-md">
+                        <h4 className="text-lg font-black text-slate-800 uppercase italic">Análise de Dados IA</h4>
+                        <p className="text-slate-500 text-sm font-medium mt-2">
+                          Clique no botão forneceremos insights profundos sobre a tendência, causas raízes e recomendações para esta métrica.
+                        </p>
+                        <button 
+                          onClick={runAiAnalysis}
+                          className="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase tracking-widest text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2 mx-auto"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          Gerar Análise Agora
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 
@@ -782,13 +892,30 @@ export default function App() {
   const [layoutConfig, setLayoutConfig] = useState<{title: string, width: number}[]>([]);
   const [eventLog, setEventLog] = useState<{ id: string, message: string, time: string, type: 'info' | 'critical' | 'success' }[]>([]);
 
+  useEffect(() => {
+    if (layoutConfig.length > 0) {
+      localStorage.setItem('dashboard_layout', JSON.stringify(layoutConfig));
+    }
+  }, [layoutConfig]);
+
   // Initialize and Fetch Configuration
   useEffect(() => {
     const initApp = async () => {
       await ensureSharePointConfig();
       const config = await fetchDashboardConfig();
       setData(config);
-      setLayoutConfig(config.map(s => ({ title: s.title, width: 33.33 })));
+      
+      const savedLayout = localStorage.getItem('dashboard_layout');
+      if (savedLayout) {
+        try {
+          const parsed = JSON.parse(savedLayout);
+          setLayoutConfig(parsed);
+        } catch (e) {
+          setLayoutConfig(config.map(s => ({ title: s.title, width: 33.33 })));
+        }
+      } else {
+        setLayoutConfig(config.map(s => ({ title: s.title, width: 33.33 })));
+      }
     };
     initApp();
   }, []);
@@ -864,12 +991,12 @@ export default function App() {
       // Persist to SP (outside of state setter)
       metricsToUpdate.forEach(m => saveMetricData(m.id, m.iso, m.result, m.history));
       
-      setEventLog(prev => [{
+      setEventLog(prev => ([{
         id: Math.random().toString(36).substr(2, 9),
         message: "Sincronização completada com sucesso.",
         time: new Date().toLocaleTimeString('pt-BR'),
-        type: 'success'
-      }, ...prev].slice(0, 50));
+        type: 'success' as const
+      }, ...prev] as { id: string; message: string; time: string; type: "info" | "success" | "critical"; }[]).slice(0, 50));
 
     } catch (err) {
       console.error("Data fetch error:", err);
@@ -931,19 +1058,19 @@ export default function App() {
       // Persist to SP
       saveMetricData(metric.id, nowIso, result, updatedHistory);
 
-      setEventLog(prev => [{
+      setEventLog(prev => ([{
         id: Math.random().toString(36).substr(2, 9),
         message: `Card "${metric.title}" atualizado automaticamente.`,
         time: now.toLocaleTimeString('pt-BR'),
-        type: 'success'
-      }, ...prev].slice(0, 50));
+        type: 'success' as const
+      }, ...prev] as { id: string; message: string; time: string; type: "info" | "success" | "critical"; }[]).slice(0, 50));
 
     } catch (err) {
       console.error(`Auto-refresh error for metric ${metric.id}:`, err);
     }
   };
 
-  const totalDivergences = data.reduce((acc, section) => acc + section.metrics.reduce((mAcc, m) => mAcc + m.value, 0), 0);
+  const totalDivergences = data.reduce((acc, section) => acc + section.metrics.reduce((mAcc, m) => mAcc + Number(m.value || 0), 0), 0);
   const criticalMetrics = data.reduce((acc, section) => acc + section.metrics.filter(m => m.status === 'error').length, 0);
 
   // Stats Logic based on History

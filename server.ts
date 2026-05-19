@@ -4,7 +4,19 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import cors from "cors";
 
+import { GoogleGenAI } from "@google/genai";
+
 dotenv.config();
+
+// Initialize Gemini API
+const genAI = new GoogleGenAI({ 
+  apiKey: process.env.GEMINI_API_KEY || "",
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 async function startServer() {
   const app = express();
@@ -18,6 +30,51 @@ async function startServer() {
   app.use((req, res, next) => {
     console.log(`${req.method} ${req.url}`);
     next();
+  });
+
+  // AI Analysis Route
+  app.post("/api/ai/analyze", async (req, res) => {
+    try {
+      const { metricTitle, objective, rules, data, history } = req.body;
+      
+      if (!metricTitle) {
+        return res.status(400).json({ error: "Missing metric title" });
+      }
+
+      const prompt = `
+        Você é um analista de dados especialista em logística e qualidade operacional.
+        Analise a seguinte métrica e forneça insights acionáveis.
+
+        MÉTRICA: ${metricTitle}
+        OBJETIVO: ${objective}
+        REGRAS DE NEGÓCIO: ${rules?.join(', ') || 'Não informadas'}
+        
+        SITUAÇÃO ATUAL:
+        - Quantidade de divergências atual: ${data?.length || 0}
+        - Histórico das últimas 10 atualizações (quantidade de linhas): ${history?.join(', ') || 'Sem histórico'}
+
+        DADOS RECENTES (AMOSTRA):
+        ${JSON.stringify(data?.slice(0, 5) || [], null, 2)}
+
+        QUESTÕES PARA ANALISAR:
+        1. Qual a tendência atual baseada no histórico? (Melhorando, Piorando ou Estável)
+        2. Qual a provável causa raiz baseada nas regras e nos dados?
+        3. Quais são as 3 recomendações imediatas para o time operacional?
+        4. Com base no SLA atual (${history?.[0] || 0} erros), qual o nível de risco?
+
+        Responda de forma concisa, profissional e formatada em Markdown. Use emojis para destacar pontos importantes.
+      `;
+
+      const response = await genAI.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt
+      });
+
+      res.json({ analysis: response.text });
+    } catch (error: any) {
+      console.error("AI analysis error:", error);
+      res.status(500).json({ error: error.message });
+    }
   });
   
   // API Route to proxy Power Automate
