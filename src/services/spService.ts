@@ -340,6 +340,24 @@ export async function spListUpdateItem(
   }
 }
 
+export async function spListDeleteItem(
+  listName: string,
+  itemId: number
+): Promise<SpResult<true>> {
+  const ln = sanitizeInput(listName);
+  try {
+    const url = `${spSiteUrl()}/_api/web/lists/getByTitle('${escapeODataString(ln)}')/items(${itemId})`;
+    const resp = await fetchWithDigestRetry(url, {
+      method: 'POST',
+      headers: { ...headersJson(), 'IF-MATCH': '*', 'X-HTTP-Method': 'DELETE' }
+    });
+    if (!resp.ok) return { status: false, message: await parseSpError(resp) };
+    return { status: true, data: true };
+  } catch (error: any) {
+    return { status: false, message: error.message };
+  }
+}
+
 async function spFieldExists(listName: string, fieldTitle: string): Promise<boolean> {
   const ln = sanitizeInput(listName);
   const ft = sanitizeInput(fieldTitle);
