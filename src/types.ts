@@ -23,6 +23,7 @@ export interface Metric {
 }
 
 export interface Section {
+  id?: string;
   title: string;
   metrics: Metric[];
 }

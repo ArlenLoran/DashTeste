@@ -47,8 +47,8 @@ export function Admin() {
 
   const handleSaveSection = async () => {
     if (!sectionTitle.trim()) return;
-    if (editingSection) {
-      await updateDivision(editingSection.title, sectionTitle, 1); // Simplification: using title as placeholder for id or finding id
+    if (editingSection?.id) {
+      await updateDivision(editingSection.id, sectionTitle, 1);
     } else {
       await addDivision(sectionTitle, sections.length + 1);
     }
@@ -70,7 +70,7 @@ export function Admin() {
     loadConfig();
   };
 
-  const openNewMetricModal = (divisionTitle: string) => {
+  const openNewMetricModal = (divisionId: string) => {
     setMetricForm({
       title: '',
       objective: '',
@@ -80,7 +80,7 @@ export function Admin() {
     });
     setEditingMetric({ 
       metric: { id: 'new', title: '', value: 0, status: 'ok', lastUpdate: '', isDynamic: true, details: [], history: [], rules: [] }, 
-      divisionId: divisionTitle // Using title as proxy for ID mapping in this simple version
+      divisionId: divisionId
     });
     setIsMetricModalOpen(true);
   };
@@ -141,7 +141,7 @@ export function Admin() {
                       <Edit2 className="w-5 h-5" />
                     </button>
                     <button 
-                      onClick={() => deleteDivision(section.title).then(loadConfig)}
+                      onClick={() => section.id && deleteDivision(section.id).then(loadConfig)}
                       className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all"
                     >
                       <Trash2 className="w-5 h-5" />
@@ -175,7 +175,7 @@ export function Admin() {
                                 sqlQuery: metric.sqlQuery || '',
                                 refreshInterval: metric.refreshInterval || 5
                               });
-                              setEditingMetric({ metric, divisionId: section.title });
+                              setEditingMetric({ metric, divisionId: section.id || '' });
                               setIsMetricModalOpen(true);
                             }}
                             className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2"
@@ -192,7 +192,7 @@ export function Admin() {
                       </div>
                     ))}
                     <button 
-                      onClick={() => openNewMetricModal(section.title)}
+                      onClick={() => section.id && openNewMetricModal(section.id)}
                       className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group"
                     >
                       <Plus className="w-5 h-5 group-hover:scale-125 transition-transform" />

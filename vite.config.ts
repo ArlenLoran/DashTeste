@@ -12,6 +12,14 @@ export default defineConfig(({mode}) => {
       'process.env.APP_URL': JSON.stringify(process.env.APP_URL || env.APP_URL),
       'process.env.POWER_AUTOMATE_URL': JSON.stringify(process.env.POWER_AUTOMATE_URL || env.POWER_AUTOMATE_URL),
     },
+    build: {
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          admin: path.resolve(__dirname, 'admin.html'),
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

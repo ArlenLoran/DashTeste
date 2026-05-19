@@ -199,6 +199,7 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
     const allRules = ruleRes.data;
 
     const sections: Section[] = divisions.map((div: any) => ({
+      id: String(div.Id),
       title: div.Title,
       metrics: cards
         .filter((c: any) => c.DivisionId === div.Id)
