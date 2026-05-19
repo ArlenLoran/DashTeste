@@ -57,10 +57,11 @@ function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, o
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!metric.lastUpdateAt || !metric.refreshInterval || !onRefresh) return;
+    if (!metric || !metric.lastUpdateAt || !metric.refreshInterval || !onRefresh) return;
     const calculate = () => {
       const now = new Date();
       const last = new Date(metric.lastUpdateAt!);
+      if (isNaN(last.getTime())) return 0;
       const next = new Date(last.getTime() + metric.refreshInterval! * 60000);
       const diff = Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
       return diff;
@@ -75,7 +76,7 @@ function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, o
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [metric.lastUpdateAt, metric.refreshInterval, metric.id, onRefresh]);
+  }, [metric.lastUpdateAt, metric.refreshInterval, metric.id]);
 
   if (hideUI) return null;
   if (timeLeft === null || !metric.refreshInterval) return null;
@@ -279,7 +280,7 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
       if (data.error) throw new Error(data.error);
       setAiAnalysis(data.analysis);
     } catch (err: any) {
-      setAiAnalysis(`### \u274C Erro na an\u00E1lise\nN\u00E3o foi poss\u00EDvel processar a an\u00E1lise no momento. Detalhes: ${err.message}`);
+      setAiAnalysis(`### ❌ Erro na análise\nNão foi possível processar a análise no momento. Detalhes: ${err.message}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -310,10 +311,10 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
   const downloadExcel = () => {
     if (!metric.details || metric.details.length === 0) return;
     let worksheet = metric.isDynamic ? XLSX.utils.json_to_sheet(metric.details) : XLSX.utils.json_to_sheet(metric.details.map(d => ({
-        'Posi\u00E7\u00E3o': d.posicao, 'Item': d.item, 'Validade': d.validade, 'Lote': d.lote, 'Quantidade': d.quantidade, 'Motivo': d.motivo
+        'Posição': d.posicao, 'Item': d.item, 'Validade': d.validade, 'Lote': d.lote, 'Quantidade': d.quantidade, 'Motivo': d.motivo
     })));
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Diverg\u00EAncias");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Divergências");
     XLSX.writeFile(workbook, `Divergencias_${metric.title.replace(/\s/g, '_')}.xlsx`);
   };
 
@@ -326,12 +327,12 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
             <div>
               <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight italic">Detalhes: <span className="text-brand-red">{metric.title}</span></h2>
               <div className="flex items-center gap-2">
-                <p className="text-[10px] font-bold text-slate-500 uppercase">Varia\u00E7\u00F5es Identificadas - {metric.lastUpdate}</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Variações Identificadas - {metric.lastUpdate}</p>
                 {metric.refreshInterval && (
                   <>
                     <div className="w-px h-3 bg-slate-200" />
                     <div className="flex items-center gap-1">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Pr\u00F3xima atualiza\u00E7\u00E3o em:</span>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Próxima atualização em:</span>
                       <Countdown metric={metric} onRefresh={onRefresh} className="flex items-center gap-1 text-[10px] font-black" />
                     </div>
                   </>
@@ -368,12 +369,12 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
                           <tr className="bg-slate-50 border-b border-slate-200">
                             {metric.isDynamic ? dynamicColumns.map(col => <th key={col} className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider">{col}</th>) : (
                                 <>
-                                  <th className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider">Posi\u00E7\u00E3o</th>
-                                  <th className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider">Item / Descri\u00E7\u00E3o</th>
+                                  <th className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider">Posição</th>
+                                  <th className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider">Item / Descrição</th>
                                   <th className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider text-center">Validade</th>
                                   <th className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider text-center">Lote</th>
                                   <th className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider text-center">Qtd.</th>
-                                  <th className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider">Motivo Diverg\u00EAncia</th>
+                                  <th className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider">Motivo Divergência</th>
                                 </>
                             )}
                           </tr>
@@ -414,31 +415,31 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
                     <div className="w-20 h-20 rounded-full bg-emerald-50 flex items-center justify-center border-4 border-emerald-100"><CheckCircle2 className="w-10 h-10 text-emerald-500" /></div>
-                    <div><h3 className="text-xl font-black text-slate-900 tracking-tight">SEM DIVERG\u00CANCIA</h3><p className="text-slate-500 font-medium">Todos os registros para esta m\u00E9trica est\u00E3o em conformidade.</p></div>
+                    <div><h3 className="text-xl font-black text-slate-900 tracking-tight">SEM DIVERGÊNCIA</h3><p className="text-slate-500 font-medium">Todos os registros para esta métrica estão em conformidade.</p></div>
                   </div>
                 )}
               </motion.div>
             )}
             {activeTab === 'objective' && (
               <motion.div key="objective" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.2 }} className="bg-slate-50 rounded-xl p-8 border border-slate-200">
-                <div className="flex items-center gap-3 mb-6"><div className="p-3 bg-blue-100 text-blue-600 rounded-xl"><BookOpen className="w-8 h-8" /></div><h3 className="text-2xl font-black text-slate-900 italic tracking-tighter uppercase">Objetivo da M\u00E9trica</h3></div>
-                <p className="text-lg text-slate-700 leading-relaxed font-medium">{metric.objective || "Nenhum objetivo detalhado cadastrado para esta m\u00E9trica."}</p>
+                <div className="flex items-center gap-3 mb-6"><div className="p-3 bg-blue-100 text-blue-600 rounded-xl"><BookOpen className="w-8 h-8" /></div><h3 className="text-2xl font-black text-slate-900 italic tracking-tighter uppercase">Objetivo da Métrica</h3></div>
+                <p className="text-lg text-slate-700 leading-relaxed font-medium">{metric.objective || "Nenhum objetivo detalhado cadastrado para esta métrica."}</p>
               </motion.div>
             )}
             {activeTab === 'rules' && (
               <motion.div key="rules" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.2 }} className="space-y-4">
-                <div className="flex items-center gap-3 mb-4"><div className="p-3 bg-amber-100 text-amber-600 rounded-xl"><ShieldCheck className="w-8 h-8" /></div><h3 className="text-2xl font-black text-slate-900 italic tracking-tighter uppercase">Regras de Valida\u00E7\u00E3o</h3></div>
+                <div className="flex items-center gap-3 mb-4"><div className="p-3 bg-amber-100 text-amber-600 rounded-xl"><ShieldCheck className="w-8 h-8" /></div><h3 className="text-2xl font-black text-slate-900 italic tracking-tighter uppercase">Regras de Validação</h3></div>
                 {metric.rules && metric.rules.length > 0 ? (
                   <div className="grid gap-3">{metric.rules.map((rule, idx) => (
                       <div key={idx} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm border-l-4 border-l-amber-500"><p className="text-slate-700 font-bold whitespace-pre-line text-sm leading-relaxed"><span className="text-amber-600 font-black mr-2">REGRA {idx + 1}:</span>{rule}</p></div>
                   ))}</div>
-                ) : <p className="text-slate-500 italic p-8 bg-slate-50 rounded-xl border border-slate-200 text-center">Nenhuma regra de valida\u00E7\u00E3o cadastrada para esta m\u00E9trica.</p>}
+                ) : <p className="text-slate-500 italic p-8 bg-slate-50 rounded-xl border border-slate-200 text-center">Nenhuma regra de validação cadastrada para esta métrica.</p>}
               </motion.div>
             )}
             {activeTab === 'trend' && (
               <motion.div key="trend" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.2 }} className="space-y-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3"><div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl"><Activity className="w-8 h-8" /></div><h3 className="text-2xl font-black text-slate-900 italic tracking-tighter uppercase">An\u00E1lise de Tend\u00EAncia</h3></div>
+                  <div className="flex items-center gap-3"><div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl"><Activity className="w-8 h-8" /></div><h3 className="text-2xl font-black text-slate-900 italic tracking-tighter uppercase">Análise de Tendência</h3></div>
                   <div className="text-right"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Valor Atual</p><p className="text-3xl font-black text-slate-900 tabular-nums">{metric.value}</p></div>
                 </div>
                 {metric.history && metric.history.length > 0 ? (
@@ -454,11 +455,11 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                ) : <div className="bg-slate-50 border border-slate-200 rounded-xl p-12 text-center"><p className="text-slate-500 font-bold italic">Nenhum dado hist\u00F3rico dispon\u00EDvel para esta m\u00E9trica ainda.</p></div>}
+                ) : <div className="bg-slate-50 border border-slate-200 rounded-xl p-12 text-center"><p className="text-slate-500 font-bold italic">Nenhum dado histórico disponível para esta métrica ainda.</p></div>}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">M\u00E9dia</p><p className="text-lg font-black text-slate-800">{metric.history && metric.history.length > 0 ? (metric.history.reduce((acc, curr) => acc + curr, 0) / metric.history.length).toFixed(1) : '0'}</p></div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Média</p><p className="text-lg font-black text-slate-800">{metric.history && metric.history.length > 0 ? (metric.history.reduce((acc, curr) => acc + curr, 0) / metric.history.length).toFixed(1) : '0'}</p></div>
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Pico</p><p className="text-lg font-black text-slate-800">{metric.history && metric.history.length > 0 ? Math.max(...metric.history) : '0'}</p></div>
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p><p className={`text-lg font-black ${metric.status === 'error' ? 'text-brand-red' : 'text-emerald-500'}`}>{metric.status === 'error' ? 'CR\u00CDTICO' : 'EST\u00C1VEL'}</p></div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p><p className={`text-lg font-black ${metric.status === 'error' ? 'text-brand-red' : 'text-emerald-500'}`}>{metric.status === 'error' ? 'CRÍTICO' : 'ESTÁVEL'}</p></div>
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Meta</p><p className="text-lg font-black text-slate-800">0</p></div>
                 </div>
               </motion.div>
@@ -466,14 +467,14 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
             {activeTab === 'ai' && (
               <motion.div key="ai" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.2 }} className="space-y-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3"><div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl"><Sparkles className="w-8 h-8" /></div><h3 className="text-2xl font-black text-slate-900 italic tracking-tighter uppercase">Intelig\u00EAncia Artificial</h3></div>
-                  {aiAnalysis && <button onClick={runAiAnalysis} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors" disabled={isAnalyzing}><RefreshCcw className={`w-3 h-3 ${isAnalyzing ? 'animate-spin' : ''}`} />Refazer An\u00E1lise</button>}
+                  <div className="flex items-center gap-3"><div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl"><Sparkles className="w-8 h-8" /></div><h3 className="text-2xl font-black text-slate-900 italic tracking-tighter uppercase">Inteligência Artificial</h3></div>
+                  {aiAnalysis && <button onClick={runAiAnalysis} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors" disabled={isAnalyzing}><RefreshCcw className={`w-3 h-3 ${isAnalyzing ? 'animate-spin' : ''}`} />Refazer Análise</button>}
                 </div>
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 min-h-[400px] relative overflow-y-auto max-h-[55vh]">
                   {isAnalyzing ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
                       <div className="relative"><motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }} transition={{ duration: 2, repeat: Infinity }} className="absolute inset-0 bg-indigo-200 rounded-full blur-xl"/><Sparkles className="w-12 h-12 text-indigo-600 relative animate-bounce" /></div>
-                      <div><p className="font-black text-slate-800 uppercase tracking-widest text-sm">Gerando Insights com Gemini</p><p className="text-[10px] text-slate-500 font-bold uppercase mt-1 px-8">Isso pode levar alguns segundos enquanto analisamos padr\u00F5es e regras...</p></div>
+                      <div><p className="font-black text-slate-800 uppercase tracking-widest text-sm">Gerando Insights com Gemini</p><p className="text-[10px] text-slate-500 font-bold uppercase mt-1 px-8">Isso pode levar alguns segundos enquanto analisamos padrões e regras...</p></div>
                     </div>
                   ) : aiAnalysis ? (
                     <div className="markdown-body prose prose-slate max-w-none prose-sm prose-headings:font-black prose-headings:uppercase prose-headings:italic prose-headings:tracking-tighter prose-p:text-slate-600 prose-p:font-medium prose-strong:text-slate-900"><Markdown>{aiAnalysis}</Markdown></div>
@@ -481,9 +482,9 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
                     <div className="flex flex-col items-center justify-center h-full text-center py-12 gap-6">
                       <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center shadow-inner"><Sparkles className="w-10 h-10 text-indigo-600" /></div>
                       <div className="max-w-md">
-                        <h4 className="text-lg font-black text-slate-800 uppercase italic">An\u00E1lise de Dados IA</h4>
-                        <p className="text-slate-500 text-sm font-medium mt-2">Clique no bot\u00E3o forneceremos insights profundos sobre a tend\u00EAncia, causas ra\u00EDzes e recomenda\u00E7\u00F5es para esta m\u00E9trica.</p>
-                        <button onClick={runAiAnalysis} className="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase tracking-widest text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2 mx-auto"><Sparkles className="w-4 h-4" />Gerar An\u00E1lise Agora</button>
+                        <h4 className="text-lg font-black text-slate-800 uppercase italic">Análise de Dados IA</h4>
+                        <p className="text-slate-500 text-sm font-medium mt-2">Clique no botão forneceremos insights profundos sobre a tendência, causas raízes e recomendações para esta métrica.</p>
+                        <button onClick={runAiAnalysis} className="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase tracking-widest text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2 mx-auto"><Sparkles className="w-4 h-4" />Gerar Análise Agora</button>
                       </div>
                     </div>
                   )}
@@ -493,7 +494,7 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
           </AnimatePresence>
         </div>
         <footer className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
-          <div className="flex items-center gap-2 text-slate-400"><Info className="w-4 h-4" /><span className="text-[10px] font-bold uppercase tracking-widest">Informa\u00E7\u00F5es em tempo real do ERP/WMS</span></div>
+          <div className="flex items-center gap-2 text-slate-400"><Info className="w-4 h-4" /><span className="text-[10px] font-bold uppercase tracking-widest">Informações em tempo real do ERP/WMS</span></div>
           <button onClick={onClose} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95 shadow-md">Fechar Painel</button>
         </footer>
       </motion.div>
@@ -725,10 +726,10 @@ export function Dashboard() {
       </header>
 
       <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 mx-auto w-full transition-all duration-700 ${isWarRoom ? 'max-w-[1700px]' : 'max-w-[1400px]'}`}>
-        <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Total Diverg\u00EAncias</p><h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>{totalDivergences}</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-indigo-500/10 text-indigo-400' : 'bg-slate-50 text-slate-400'}`}><Activity className="w-5 h-5" /></div></div><div className={`mt-4 h-1.5 w-full rounded-full overflow-hidden ${isWarRoom ? 'bg-slate-800' : 'bg-slate-100'}`}><motion.div initial={{ width: 0 }} animate={{ width: '65%' }} className="h-full bg-brand-red" /></div></div>
-        <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>M\u00E9tricas Cr\u00EDticas</p><h4 className="text-3xl font-black italic tracking-tighter text-brand-red">{criticalMetrics}</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-400'}`}><XCircle className="w-5 h-5" /></div></div><p className="mt-4 text-[10px] font-bold text-slate-500 italic">Requer aten\u00E7\u00E3o imediata</p></div>
+        <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Total Divergências</p><h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>{totalDivergences}</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-indigo-500/10 text-indigo-400' : 'bg-slate-50 text-slate-400'}`}><Activity className="w-5 h-5" /></div></div><div className={`mt-4 h-1.5 w-full rounded-full overflow-hidden ${isWarRoom ? 'bg-slate-800' : 'bg-slate-100'}`}><motion.div initial={{ width: 0 }} animate={{ width: '65%' }} className="h-full bg-brand-red" /></div></div>
+        <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Métricas Críticas</p><h4 className="text-3xl font-black italic tracking-tighter text-brand-red">{criticalMetrics}</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-400'}`}><XCircle className="w-5 h-5" /></div></div><p className="mt-4 text-[10px] font-bold text-slate-500 italic">Requer atenção imediata</p></div>
         <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Acertos Hoje</p><h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-emerald-500' : 'text-emerald-600'}`}>{accuracyToday.toFixed(1)}%</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}><CheckCircle2 className="w-5 h-5" /></div></div><div className="mt-4 flex items-center gap-1">{trendValue >= 0 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-red-500" />}<span className={`text-[10px] font-black ${trendValue >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{trendValue >= 0 ? '+' : ''}{trendValue.toFixed(1)}% vs anterior</span></div></div>
-        <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-brand-red border-red-800 shadow-[0_0_30px_rgba(204,0,0,0.2)]' : 'bg-brand-yellow border-brand-yellow shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>SLA Operacional</p><h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>{slaScore.toFixed(1)}%</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-white/10 text-white' : 'bg-white/20 text-slate-900'}`}><RefreshCcw className="w-5 h-5" /></div></div><p className={`mt-4 text-[10px] font-black uppercase ${isWarRoom ? 'text-red-200' : 'text-slate-700'}`}>Status: {slaScore > 95 ? 'Excelente' : slaScore > 80 ? 'Bom' : 'Cr\u00EDtico'}</p></div>
+        <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-brand-red border-red-800 shadow-[0_0_30px_rgba(204,0,0,0.2)]' : 'bg-brand-yellow border-brand-yellow shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>SLA Operacional</p><h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>{slaScore.toFixed(1)}%</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-white/10 text-white' : 'bg-white/20 text-slate-900'}`}><RefreshCcw className="w-5 h-5" /></div></div><p className={`mt-4 text-[10px] font-black uppercase ${isWarRoom ? 'text-red-200' : 'text-slate-700'}`}>Status: {slaScore > 95 ? 'Excelente' : slaScore > 80 ? 'Bom' : 'Crítico'}</p></div>
       </div>
 
       <div className={`flex flex-wrap gap-x-8 gap-y-12 px-2 transition-all duration-700 mx-auto justify-center ${isWarRoom ? 'max-w-[1700px]' : 'max-w-[1400px]'}`}>
@@ -793,7 +794,7 @@ export function Dashboard() {
                   </div>
                 )}
               </div>
-              <div className={`mt-auto pt-6 p-4 rounded-xl border italic text-[10px] font-medium leading-relaxed ${isWarRoom ? 'bg-slate-950/50 border-slate-800 text-slate-500' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>{settingsTab === 'layout' ? "Sincroniza\u00E7\u00E3o inteligente de grid baseada em larguras customizadas." : "Log operacional de muta\u00E7\u00F5es detectadas em tempo real via stream."}</div>
+              <div className={`mt-auto pt-6 p-4 rounded-xl border italic text-[10px] font-medium leading-relaxed ${isWarRoom ? 'bg-slate-950/50 border-slate-800 text-slate-500' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>{settingsTab === 'layout' ? "Sincronização inteligente de grid baseada em larguras customizadas." : "Log operacional de mutações detectadas em tempo real via stream."}</div>
             </motion.div></>
         )}</AnimatePresence>
 

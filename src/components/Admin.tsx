@@ -118,7 +118,7 @@ export function Admin() {
           </div>
           <div>
             <h1 className="text-3xl font-black uppercase italic tracking-tighter">Painel administrativo</h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Gerenciamento de Estrutura & M\u00E9tricas</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Gerenciamento de Estrutura & Métricas</p>
           </div>
         </div>
         <a href="/" className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">
@@ -129,13 +129,13 @@ export function Admin() {
       <main className="max-w-6xl mx-auto space-y-8 pb-32">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-black uppercase italic tracking-tight flex items-center gap-2">
-            <Layout className="w-5 h-5 text-brand-red" /> Divis\u00F5es do Dashboard
+            <Layout className="w-5 h-5 text-brand-red" /> Divisões do Dashboard
           </h2>
           <button 
             onClick={() => { setEditingSection(null); setSectionTitle(''); setIsSectionModalOpen(true); }}
             className="px-6 py-3 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
           >
-            <Plus className="w-4 h-4" /> Nova Divis\u00E3o
+            <Plus className="w-4 h-4" /> Nova Divisão
           </button>
         </div>
 
@@ -161,7 +161,7 @@ export function Admin() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <Activity className="w-12 h-12 text-slate-300 animate-spin" />
-            <p className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Carregando Configura\u00E7\u00F5es...</p>
+            <p className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Carregando Configurações...</p>
           </div>
         ) : (
           <div className="grid gap-6">
@@ -286,12 +286,12 @@ export function Admin() {
               className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
             >
               <div className="flex justify-between items-center mb-8">
-                <h3 className="text-2xl font-black uppercase italic tracking-tighter">{editingSection ? 'Editar Divis\u00E3o' : 'Nova Divis\u00E3o'}</h3>
+                <h3 className="text-2xl font-black uppercase italic tracking-tighter">{editingSection ? 'Editar Divisão' : 'Nova Divisão'}</h3>
                 <button onClick={() => setIsSectionModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full"><X className="w-6 h-6" /></button>
               </div>
               <div className="space-y-6">
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">T\u00EDtulo da Divis\u00E3o</label>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Título da Divisão</label>
                   <input 
                     type="text" 
                     value={sectionTitle}
@@ -326,9 +326,9 @@ export function Admin() {
               <header className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                 <div>
                   <h3 className="text-2xl font-black uppercase italic tracking-tighter">
-                    {editingMetric?.metric.id === 'new' ? 'Novo Card de M\u00E9trica' : 'Editar Card de M\u00E9trica'}
+                    {editingMetric?.metric.id === 'new' ? 'Novo Card de Métrica' : 'Editar Card de Métrica'}
                   </h3>
-                  <p className="text-[10px] font-black text-slate-400 uppercase mt-1">Configura\u00E7\u00E3o din\u00E2mica e persist\u00EAncia</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase mt-1">Configuração dinâmica e persistência</p>
                 </div>
                 <button onClick={() => setIsMetricModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X className="w-6 h-6" /></button>
               </header>
@@ -337,17 +337,17 @@ export function Admin() {
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2"><Activity className="w-3 h-3" /> T\u00EDtulo do Card</label>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2"><Activity className="w-3 h-3" /> Título do Card</label>
                       <input 
                         type="text" 
                         value={metricForm.title}
                         onChange={(e) => setMetricForm({...metricForm, title: e.target.value})}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold"
-                        placeholder="Ex: Diverg\u00EAncia de Invent\u00E1rio"
+                        placeholder="Ex: Divergência de Inventário"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2"><Clock className="w-3 h-3" /> Intervalo de Atualiza\u00E7\u00E3o (Minutos)</label>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2"><Clock className="w-3 h-3" /> Intervalo de Atualização (Minutos)</label>
                       <input 
                         type="number" 
                         value={metricForm.refreshInterval}
@@ -358,12 +358,12 @@ export function Admin() {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2"><BookOpen className="w-3 h-3" /> Objetivo (Descri\u00E7\u00E3o)</label>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2"><BookOpen className="w-3 h-3" /> Objetivo (Descrição)</label>
                     <textarea 
                       value={metricForm.objective}
                       onChange={(e) => setMetricForm({...metricForm, objective: e.target.value})}
                       className="w-full h-[120px] px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold resize-none"
-                      placeholder="Descreva o prop\u00F3sito desta m\u00E9trica..."
+                      placeholder="Descreva o propósito desta métrica..."
                     />
                   </div>
                 </div>
@@ -377,12 +377,12 @@ export function Admin() {
                     placeholder="SELECT * FROM TABELA WHERE..."
                   />
                   <div className="mt-2 text-[9px] text-slate-400 font-bold uppercase p-3 bg-slate-100 rounded-lg flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-brand-red" /> Atuando em tempo real sobre a base do ERP selecionada nas configura\u00E7\u00F5es.
+                    <AlertTriangle className="w-3.5 h-3.5 text-brand-red" /> Atuando em tempo real sobre a base do ERP selecionada nas configurações.
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2"><Shield className="w-3 h-3" /> Regras de Neg\u00F3cio</label>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2"><Shield className="w-3 h-3" /> Regras de Negócio</label>
                   <div className="space-y-2">
                     {metricForm.rules.map((rule, idx) => (
                       <div key={idx} className="flex gap-2">

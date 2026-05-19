@@ -182,12 +182,14 @@ export async function addMetric(divisionId: string, metric: Partial<Metric>) {
     const sections = getLocalConfigFromStorage();
     const section = sections.find(s => s.title === divisionId || s.id === divisionId);
     if (section) {
+      const now = new Date();
       const newMetric = { 
         ...metric, 
         id: Math.random().toString(),
         value: 0,
         status: 'ok' as const,
-        lastUpdate: 'Nunca',
+        lastUpdate: now.toLocaleString('pt-BR'),
+        lastUpdateAt: now.toISOString(),
         history: [],
         details: []
       } as Metric;
@@ -202,7 +204,8 @@ export async function addMetric(divisionId: string, metric: Partial<Metric>) {
     SqlQuery: metric.sqlQuery,
     Objective: metric.objective,
     RefreshInterval: metric.refreshInterval,
-    OrderIndex: 1 // Default
+    OrderIndex: 1, // Default
+    LastUpdateDate: new Date().toISOString()
   });
   
   if (!res.status) throw new Error(res.message);
