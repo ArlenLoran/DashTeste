@@ -946,6 +946,41 @@ export default function App() {
   const totalDivergences = data.reduce((acc, section) => acc + section.metrics.reduce((mAcc, m) => mAcc + m.value, 0), 0);
   const criticalMetrics = data.reduce((acc, section) => acc + section.metrics.filter(m => m.status === 'error').length, 0);
 
+  // Stats Logic based on History
+  const allMetrics = data.flatMap(s => s.metrics);
+  const totalMetrics = allMetrics.length;
+  
+  let totalPoints = 0;
+  let totalOkPoints = 0;
+  let pointsUnderSLA = 0;
+
+  allMetrics.forEach(m => {
+    if (m.history && m.history.length > 0) {
+      totalPoints += m.history.length;
+      totalOkPoints += m.history.filter(v => v === 0).length;
+      // SLA threshold: divergence <= 10
+      pointsUnderSLA += m.history.filter(v => v <= 10).length;
+    }
+  });
+
+  const accuracyToday = totalPoints > 0 ? (totalOkPoints / totalPoints) * 100 : (totalMetrics > 0 ? (allMetrics.filter(m => m.value === 0).length / totalMetrics) * 100 : 0);
+  const slaScore = totalPoints > 0 ? (pointsUnderSLA / totalPoints) * 100 : 100;
+
+  // Trend for Accuracy
+  let prevTotalPoints = 0;
+  let prevOkPoints = 0;
+  allMetrics.forEach(m => {
+    if (m.history && m.history.length > 1) {
+      const historyExcludingLatest = m.history.slice(1);
+      prevTotalPoints += historyExcludingLatest.length;
+      prevOkPoints += historyExcludingLatest.filter(v => v === 0).length;
+    }
+  });
+
+  const currentOkRate = totalMetrics > 0 ? (allMetrics.filter(m => m.value === 0).length / totalMetrics) * 100 : 0;
+  const prevOkRate = prevTotalPoints > 0 ? (prevOkPoints / prevTotalPoints) * 100 : currentOkRate;
+  const trendValue = currentOkRate - prevOkRate;
+
   const handleWidthChange = (title: string, width: number) => {
     setLayoutConfig(prev => prev.map(c => c.title === title ? { ...c, width } : c));
   };
@@ -1080,29 +1115,37 @@ export default function App() {
           <div className="flex justify-between items-start">
             <div>
               <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Acertos Hoje</p>
-              <h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-emerald-500' : 'text-emerald-600'}`}>88%</h4>
+              <h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-emerald-500' : 'text-emerald-600'}`}>{accuracyToday.toFixed(1)}%</h4>
             </div>
             <div className={`p-2 rounded-lg ${isWarRoom ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3 text-emerald-500" />
-            <span className="text-[10px] font-black text-emerald-500">+12.5% vs ontem</span>
+            {trendValue >= 0 ? (
+              <TrendingUp className="w-3 h-3 text-emerald-500" />
+            ) : (
+              <TrendingDown className="w-3 h-3 text-red-500" />
+            )}
+            <span className={`text-[10px] font-black ${trendValue >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+              {trendValue >= 0 ? '+' : ''}{trendValue.toFixed(1)}% vs anterior
+            </span>
           </div>
         </div>
 
         <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-brand-red border-red-800 shadow-[0_0_30px_rgba(204,0,0,0.2)]' : 'bg-brand-yellow border-brand-yellow shadow-sm'}`}>
           <div className="flex justify-between items-start">
             <div>
-              <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>SLA Médio</p>
-              <h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>18m</h4>
+              <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>SLA Operacional</p>
+              <h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>{slaScore.toFixed(1)}%</h4>
             </div>
             <div className={`p-2 rounded-lg ${isWarRoom ? 'bg-white/10 text-white' : 'bg-white/20 text-slate-900'}`}>
               <RefreshCcw className="w-5 h-5" />
             </div>
           </div>
-          <p className={`mt-4 text-[10px] font-black uppercase ${isWarRoom ? 'text-red-200' : 'text-slate-700'}`}>Status: Excelente</p>
+          <p className={`mt-4 text-[10px] font-black uppercase ${isWarRoom ? 'text-red-200' : 'text-slate-700'}`}>
+            Status: {slaScore > 95 ? 'Excelente' : slaScore > 80 ? 'Bom' : 'Crítico'}
+          </p>
         </div>
       </div>
 
