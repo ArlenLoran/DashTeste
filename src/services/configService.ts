@@ -19,105 +19,114 @@ const LIST_RULES = "App_Dash_Regras";
 
 export async function ensureSharePointConfig() {
   if (!hasSpContext()) return;
-
-  // 1. Ensure Divisoes List
-  if (!(await spListExists(LIST_DIVISOES))) {
-    console.log("Creating list Divisões...");
-    await spCreateList(LIST_DIVISOES);
-    await spListEnsureNumberField(LIST_DIVISOES, "OrderIndex");
-    
-    // Seed initial divisions
-    const div1 = await spListAddItem(LIST_DIVISOES, { Title: "Separação de saldo", OrderIndex: 1 });
-    const div2 = await spListAddItem(LIST_DIVISOES, { Title: "Validação sistêmica", OrderIndex: 2 });
-    const div3 = await spListAddItem(LIST_DIVISOES, { Title: "Qualidade operacional", OrderIndex: 3 });
-
-    // 2. Ensure Cards List
-    if (!(await spListExists(LIST_CARDS))) {
-      console.log("Creating list Cards...");
-      await spCreateList(LIST_CARDS);
-      await spListEnsureNumberField(LIST_CARDS, "DivisionId");
-      await spListEnsureNumberField(LIST_CARDS, "OrderIndex");
-      await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
-      await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
-      await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
-      await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
-      await spListEnsureTextField(LIST_CARDS, "HistoryData");
-      await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
-
-      // Seed initial cards mapping to the seeded divisions
-      if (div1.status && div2.status && div3.status) {
-        await spListAddItem(LIST_CARDS, {
-          Title: "Separação de saldo",
-          DivisionId: div1.data.id,
-          SqlQuery: SQL_QUERY_SEPARACAO_SALDO,
-          Objective: "Consulta dinâmica de separação de saldo.",
-          RefreshInterval: 5,
-          OrderIndex: 1
-        });
-        await spListAddItem(LIST_CARDS, {
-          Title: "Validação sistemica",
-          DivisionId: div2.data.id,
-          SqlQuery: SQL_QUERY_VALIDACAO_SISTEMICA,
-          Objective: "Consulta dinâmica de validação sistêmica.",
-          RefreshInterval: 5,
-          OrderIndex: 1
-        });
-        await spListAddItem(LIST_CARDS, {
-          Title: "Estoque da validação sistemica",
-          DivisionId: div3.data.id,
-          SqlQuery: SQL_QUERY_ESTOQUE,
-          Objective: "Consulta dinâmica de estoque via validação sistêmica.",
-          RefreshInterval: 10,
-          OrderIndex: 1
-        });
-      }
-    }
-
-    // 3. Ensure Rules List
-    if (!(await spListExists(LIST_RULES))) {
-      console.log("Creating list Regras...");
-      await spCreateList(LIST_RULES);
-      await spListEnsureNumberField(LIST_RULES, "CardId");
+  
+  try {
+    console.log("Checking SharePoint Config...");
+    // 1. Ensure Divisoes List
+    if (!(await spListExists(LIST_DIVISOES))) {
+      console.log("Creating list Divisões...");
+      await spCreateList(LIST_DIVISOES);
+      await spListEnsureNumberField(LIST_DIVISOES, "OrderIndex");
       
-      // Seed initial rules for 1, 2, 3
-      const seedRules = [
-        { CardId: 1, Title: "Estoque físico vs sistêmico deve ser zero." },
-        { CardId: 1, Title: "Transações pendentes há mais de 24h são críticas." },
-        { CardId: 2, Title: "Validar se todos os SKUs possuem peso cadastrado." },
-        { CardId: 2, Title: "Divergência superior a 5% exige recontagem." },
-        { CardId: 3, Title: "Saldo bloqueado deve ter motivo preenchido." },
-        { CardId: 3, Title: "Comparar reserva vs disponível no WMS." }
-      ];
+      // Seed initial divisions
+      const div1 = await spListAddItem(LIST_DIVISOES, { Title: "Separação de saldo", OrderIndex: 1 });
+      const div2 = await spListAddItem(LIST_DIVISOES, { Title: "Validação sistêmica", OrderIndex: 2 });
+      const div3 = await spListAddItem(LIST_DIVISOES, { Title: "Qualidade operacional", OrderIndex: 3 });
 
-      for (const rule of seedRules) {
-        await spListAddItem(LIST_RULES, rule);
+      // 2. Ensure Cards List
+      if (!(await spListExists(LIST_CARDS))) {
+        console.log("Creating list Cards...");
+        await spCreateList(LIST_CARDS);
+        await spListEnsureNumberField(LIST_CARDS, "DivisionId");
+        await spListEnsureNumberField(LIST_CARDS, "OrderIndex");
+        await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
+        await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
+        await spListEnsureTextField(LIST_CARDS, "HistoryData");
+        await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
+        await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
+        await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
+
+        // Seed initial cards mapping to the seeded divisions
+        if (div1.status && div2.status && div3.status) {
+          await spListAddItem(LIST_CARDS, {
+            Title: "Separação de saldo",
+            DivisionId: div1.data.id,
+            SqlQuery: SQL_QUERY_SEPARACAO_SALDO,
+            Objective: "Consulta dinâmica de separação de saldo.",
+            RefreshInterval: 5,
+            OrderIndex: 1
+          });
+          await spListAddItem(LIST_CARDS, {
+            Title: "Validação sistemica",
+            DivisionId: div2.data.id,
+            SqlQuery: SQL_QUERY_VALIDACAO_SISTEMICA,
+            Objective: "Consulta dinâmica de validação sistêmica.",
+            RefreshInterval: 5,
+            OrderIndex: 2
+          });
+          await spListAddItem(LIST_CARDS, {
+            Title: "Estoque da validação sistemica",
+            DivisionId: div3.data.id,
+            SqlQuery: SQL_QUERY_ESTOQUE,
+            Objective: "Consulta dinâmica de estoque via validação sistêmica.",
+            RefreshInterval: 10,
+            OrderIndex: 3
+          });
+        }
+      }
+
+      // 3. Ensure Rules List
+      if (!(await spListExists(LIST_RULES))) {
+        console.log("Creating list Regras...");
+        await spCreateList(LIST_RULES);
+        await spListEnsureNumberField(LIST_RULES, "CardId");
+        
+        // Seed initial rules for 1, 2, 3
+        const seedRules = [
+          { CardId: 1, Title: "Estoque físico vs sistêmico deve ser zero." },
+          { CardId: 1, Title: "Transações pendentes há mais de 24h são críticas." },
+          { CardId: 2, Title: "Validar se todos os SKUs possuem peso cadastrado." },
+          { CardId: 2, Title: "Divergência superior a 5% exige recontagem." },
+          { CardId: 3, Title: "Saldo bloqueado deve ter motivo preenchido." },
+          { CardId: 3, Title: "Comparar reserva vs disponível no WMS." }
+        ];
+
+        for (const rule of seedRules) {
+          await spListAddItem(LIST_RULES, rule);
+        }
+      }
+    } else {
+      // Just ensure fields if list already existed
+      await spListEnsureNumberField(LIST_DIVISOES, "OrderIndex");
+      if (!(await spListExists(LIST_CARDS))) {
+        await spCreateList(LIST_CARDS);
+        await spListEnsureNumberField(LIST_CARDS, "DivisionId");
+        await spListEnsureNumberField(LIST_CARDS, "OrderIndex");
+        await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
+        await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
+        await spListEnsureTextField(LIST_CARDS, "HistoryData");
+        await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
+        await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
+        await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
+      } else {
+        // Ensure new fields on existing list
+        await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
+        await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
+        await spListEnsureTextField(LIST_CARDS, "HistoryData");
+        await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
+        await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
+        await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
+      }
+
+      // Ensure Rules list exists and fields are correct
+      if (!(await spListExists(LIST_RULES))) {
+        await spCreateList(LIST_RULES);
+        await spListEnsureNumberField(LIST_RULES, "CardId");
       }
     }
-  } else {
-    // Just ensure fields if list already existed
-    await spListEnsureNumberField(LIST_DIVISOES, "OrderIndex");
-    if (!(await spListExists(LIST_CARDS))) {
-      await spCreateList(LIST_CARDS);
-      await spListEnsureNumberField(LIST_CARDS, "DivisionId");
-      await spListEnsureNumberField(LIST_CARDS, "OrderIndex");
-      await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
-      await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
-      await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
-      await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
-      await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
-    } else {
-      // Ensure new fields on existing list
-      await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
-      await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
-      await spListEnsureTextField(LIST_CARDS, "HistoryData");
-      await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
-    }
-
-    // Ensure Rules list exists and fields are correct
-    if (!(await spListExists(LIST_RULES))) {
-      await spCreateList(LIST_RULES);
-      await spListEnsureNumberField(LIST_RULES, "CardId");
-    }
+    console.log("Config structure verified.");
+  } catch (err) {
+    console.error("Critical error ensuring SharePoint structure:", err);
   }
 }
 
@@ -201,7 +210,9 @@ export async function addMetric(divisionId: string, metric: Partial<Metric>) {
   // Rules
   if (metric.rules && metric.rules.length > 0) {
     for (const rule of metric.rules) {
-      await spListAddItem(LIST_RULES, { Title: rule, CardId: res.data.id });
+      if (rule.trim()) {
+        await spListAddItem(LIST_RULES, { Title: rule.trim(), CardId: res.data.id });
+      }
     }
   }
 
@@ -251,10 +262,12 @@ export async function updateMetric(id: string, metric: Partial<Metric>) {
 
 export async function fetchDashboardConfig(): Promise<Section[]> {
   if (!hasSpContext()) {
+    console.log("Using Mock Storage for Config");
     return getLocalConfigFromStorage();
   }
 
   try {
+    console.log("Fetching config from SharePoint...");
     const [divRes, cardRes, ruleRes] = await Promise.all([
       spListGetItems(LIST_DIVISOES, { orderBy: "OrderIndex asc" }),
       spListGetItems(LIST_CARDS, { orderBy: "OrderIndex asc" }),

@@ -20,6 +20,8 @@ import {
 export function Admin() {
   const [sections, setSections] = useState<Section[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [editingSection, setEditingSection] = useState<Section | null>(null);
   const [editingMetric, setEditingMetric] = useState<{ metric: Metric, divisionId: string } | null>(null);
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
@@ -49,27 +51,47 @@ export function Admin() {
 
   const handleSaveSection = async () => {
     if (!sectionTitle.trim()) return;
-    if (editingSection?.id) {
-      await updateDivision(editingSection.id, sectionTitle, 1);
-    } else {
-      await addDivision(sectionTitle, sections.length + 1);
+    setIsSaving(true);
+    setStatusMessage(null);
+    try {
+      if (editingSection?.id) {
+        await updateDivision(editingSection.id, sectionTitle, 1);
+      } else {
+        await addDivision(sectionTitle, sections.length + 1);
+      }
+      setSectionTitle('');
+      setEditingSection(null);
+      setIsSectionModalOpen(false);
+      setStatusMessage({ type: 'success', text: 'Divisão salva com sucesso!' });
+      loadConfig();
+    } catch (err: any) {
+      console.error(err);
+      setStatusMessage({ type: 'error', text: `Erro ao salvar divisão: ${err.message}` });
+    } finally {
+      setIsSaving(false);
     }
-    setSectionTitle('');
-    setEditingSection(null);
-    setIsSectionModalOpen(false);
-    loadConfig();
   };
 
   const handleSaveMetric = async () => {
     if (!metricForm.title.trim() || !editingMetric?.divisionId) return;
-    if (editingMetric.metric.id !== 'new') {
-      await updateMetric(editingMetric.metric.id, metricForm);
-    } else {
-      await addMetric(editingMetric.divisionId, metricForm);
+    setIsSaving(true);
+    setStatusMessage(null);
+    try {
+      if (editingMetric.metric.id !== 'new') {
+        await updateMetric(editingMetric.metric.id, metricForm);
+      } else {
+        await addMetric(editingMetric.divisionId, metricForm);
+      }
+      setEditingMetric(null);
+      setIsMetricModalOpen(false);
+      setStatusMessage({ type: 'success', text: 'Card salvo com sucesso!' });
+      loadConfig();
+    } catch (err: any) {
+      console.error(err);
+      setStatusMessage({ type: 'error', text: `Erro ao salvar card: ${err.message}` });
+    } finally {
+      setIsSaving(false);
     }
-    setEditingMetric(null);
-    setIsMetricModalOpen(false);
-    loadConfig();
   };
 
   const openNewMetricModal = (divisionId: string) => {
@@ -117,6 +139,25 @@ export function Admin() {
           </button>
         </div>
 
+        <AnimatePresence>
+          {statusMessage && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className={`p-4 rounded-xl border flex items-center gap-3 font-bold text-xs uppercase tracking-widest ${
+                statusMessage.type === 'success' 
+                  ? 'bg-emerald-50 border-emerald-100 text-emerald-600' 
+                  : 'bg-red-50 border-red-100 text-red-600'
+              }`}
+            >
+              {statusMessage.type === 'success' ? <Shield className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+              {statusMessage.text}
+              <button onClick={() => setStatusMessage(null)} className="ml-auto opacity-50 hover:opacity-100"><X className="w-4 h-4" /></button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <Activity className="w-12 h-12 text-slate-300 animate-spin" />
@@ -143,7 +184,20 @@ export function Admin() {
                       <Edit2 className="w-5 h-5" />
                     </button>
                     <button 
-                      onClick={() => section.id && deleteDivision(section.id).then(loadConfig)}
+                      onClick={async () => {
+                        if (section.id && window.confirm(`Deseja realmente excluir a divisão "${section.title}"?`)) {
+                          try {
+                            setIsSaving(true);
+                            await deleteDivision(section.id);
+                            setStatusMessage({ type: 'success', text: 'Divisão excluída!' });
+                            loadConfig();
+                          } catch (err: any) {
+                            setStatusMessage({ type: 'error', text: `Erro ao excluir: ${err.message}` });
+                          } finally {
+                            setIsSaving(false);
+                          }
+                        }
+                      }}
                       className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all"
                     >
                       <Trash2 className="w-5 h-5" />
@@ -185,7 +239,20 @@ export function Admin() {
                             <Edit2 className="w-3 h-3" /> Editar
                           </button>
                           <button 
-                            onClick={() => deleteMetric(metric.id).then(loadConfig)}
+                            onClick={async () => {
+                              if (window.confirm(`Deseja realmente excluir o card "${metric.title}"?`)) {
+                                try {
+                                  setIsSaving(true);
+                                  await deleteMetric(metric.id);
+                                  setStatusMessage({ type: 'success', text: 'Card excluído!' });
+                                  loadConfig();
+                                } catch (err: any) {
+                                  setStatusMessage({ type: 'error', text: `Erro ao excluir: ${err.message}` });
+                                } finally {
+                                  setIsSaving(false);
+                                }
+                              }
+                            }}
                             className="px-4 py-2 bg-white border border-slate-200 text-red-500 rounded-lg font-black text-[10px] uppercase tracking-widest hover:border-red-100 hover:bg-red-50 transition-all flex items-center gap-2"
                           >
                             <Trash2 className="w-3 h-3" /> Excluir
@@ -235,9 +302,10 @@ export function Admin() {
                 </div>
                 <button 
                   onClick={handleSaveSection}
-                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2 hover:bg-slate-800 transition-all"
+                  disabled={isSaving}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Save className="w-5 h-5" /> {editingSection ? 'Salvar Altera\u00E7\u00F5es' : 'Criar Divis\u00E3o'}
+                  <Save className={isSaving ? "w-5 h-5 animate-spin" : "w-5 h-5"} /> {isSaving ? 'Salvando...' : (editingSection ? 'Salvar Alterações' : 'Criar Divisão')}
                 </button>
               </div>
             </motion.div>
@@ -342,12 +410,13 @@ export function Admin() {
               </div>
 
               <footer className="p-8 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
-                <button onClick={() => setIsMetricModalOpen(false)} className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all">Cancelar</button>
+                <button onClick={() => setIsMetricModalOpen(false)} disabled={isSaving} className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all disabled:opacity-50">Cancelar</button>
                 <button 
                   onClick={handleSaveMetric}
-                  className="px-10 py-3 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg active:scale-95"
+                  disabled={isSaving}
+                  className="px-10 py-3 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Save className="w-4 h-4" /> Salvar Card
+                  <Save className={isSaving ? "w-4 h-4 animate-spin" : "w-4 h-4"} /> {isSaving ? 'Salvando...' : 'Salvar Card'}
                 </button>
               </footer>
             </motion.div>
