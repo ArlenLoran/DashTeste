@@ -42,6 +42,7 @@ export async function ensureSharePointConfig() {
       await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
       await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
       await spListEnsureTextField(LIST_CARDS, "HistoryData");
+      await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
 
       // Seed initial cards mapping to the seeded divisions
       if (div1.status && div2.status && div3.status) {
@@ -121,29 +122,71 @@ export async function ensureSharePointConfig() {
 }
 
 export async function addDivision(title: string, orderIndex: number) {
-  if (!hasSpContext()) return { id: Math.random().toString(), Title: title, OrderIndex: orderIndex };
+  if (!hasSpContext()) {
+    const sections = getLocalConfigFromStorage();
+    const newDiv = { title, metrics: [] };
+    sections.push(newDiv);
+    localStorage.setItem('dash_config_mock', JSON.stringify(sections));
+    return { id: Math.random().toString(), Title: title, OrderIndex: orderIndex };
+  }
   const res = await spListAddItem(LIST_DIVISOES, { Title: title, OrderIndex: orderIndex });
   if (res.status) return res.data;
   throw new Error(res.message);
 }
 
 export async function updateDivision(id: string, title: string, orderIndex: number) {
-  if (!hasSpContext()) return { id, Title: title, OrderIndex: orderIndex };
-  await spListUpdateItem(LIST_DIVISOES, Number(id), { Title: title, OrderIndex: orderIndex });
+  if (!hasSpContext()) {
+    const sections = getLocalConfigFromStorage();
+    // In mock mode, we use title as ID sometimes or index
+    const section = sections.find(s => s.title === id || s.id === id);
+    if (section) section.title = title;
+    localStorage.setItem('dash_config_mock', JSON.stringify(sections));
+    return { id, Title: title, OrderIndex: orderIndex };
+  }
+  const res = await spListUpdateItem(LIST_DIVISOES, Number(id), { Title: title, OrderIndex: orderIndex });
+  if (!res.status) throw new Error(res.message);
 }
 
 export async function deleteDivision(id: string) {
-  if (!hasSpContext()) return;
+  if (!hasSpContext()) {
+    const sections = getLocalConfigFromStorage().filter(s => s.title !== id && s.id !== id);
+    localStorage.setItem('dash_config_mock', JSON.stringify(sections));
+    return;
+  }
   await spListDeleteItem(LIST_DIVISOES, Number(id));
 }
 
 export async function deleteMetric(id: string) {
-  if (!hasSpContext()) return;
+  if (!hasSpContext()) {
+    const sections = getLocalConfigFromStorage();
+    sections.forEach(s => {
+      s.metrics = s.metrics.filter(m => m.id !== id);
+    });
+    localStorage.setItem('dash_config_mock', JSON.stringify(sections));
+    return;
+  }
   await spListDeleteItem(LIST_CARDS, Number(id));
 }
 
 export async function addMetric(divisionId: string, metric: Partial<Metric>) {
-  if (!hasSpContext()) return { id: Math.random().toString(), ...metric };
+  if (!hasSpContext()) {
+    const sections = getLocalConfigFromStorage();
+    const section = sections.find(s => s.title === divisionId || s.id === divisionId);
+    if (section) {
+      const newMetric = { 
+        ...metric, 
+        id: Math.random().toString(),
+        value: 0,
+        status: 'ok' as const,
+        lastUpdate: 'Nunca',
+        history: [],
+        details: []
+      } as Metric;
+      section.metrics.push(newMetric);
+      localStorage.setItem('dash_config_mock', JSON.stringify(sections));
+    }
+    return { id: Math.random().toString(), ...metric };
+  }
   const res = await spListAddItem(LIST_CARDS, {
     Title: metric.title,
     DivisionId: Number(divisionId),
@@ -166,23 +209,49 @@ export async function addMetric(divisionId: string, metric: Partial<Metric>) {
 }
 
 export async function updateMetric(id: string, metric: Partial<Metric>) {
-  if (!hasSpContext()) return;
+  if (!hasSpContext()) {
+    const sections = getLocalConfigFromStorage();
+    sections.forEach(s => {
+      const mIdx = s.metrics.findIndex(m => m.id === id);
+      if (mIdx !== -1) {
+        s.metrics[mIdx] = { ...s.metrics[mIdx], ...metric };
+      }
+    });
+    localStorage.setItem('dash_config_mock', JSON.stringify(sections));
+    return;
+  }
   const fields: any = {
     Title: metric.title,
     SqlQuery: metric.sqlQuery,
     Objective: metric.objective,
     RefreshInterval: metric.refreshInterval
   };
-  await spListUpdateItem(LIST_CARDS, Number(id), fields);
+  const res = await spListUpdateItem(LIST_CARDS, Number(id), fields);
+  if (!res.status) throw new Error(res.message);
 
-  // For rules, it's more complex (syncing). A simple way is to delete and re-add or just leave as is.
-  // Given spService limits, I'll focus on the core fields for now.
+  // Sync rules: simpler to clear and re-add for this context
+  if (metric.rules) {
+    try {
+      const existingRulesRes = await spListGetItems(LIST_RULES, { filter: `CardId eq ${id}` });
+      if (existingRulesRes.status) {
+        for (const rule of existingRulesRes.data) {
+          await spListDeleteItem(LIST_RULES, rule.Id);
+        }
+      }
+      for (const ruleText of metric.rules) {
+        if (ruleText.trim()) {
+          await spListAddItem(LIST_RULES, { Title: ruleText, CardId: Number(id) });
+        }
+      }
+    } catch (err) {
+      console.error("Error syncing rules:", err);
+    }
+  }
 }
 
 export async function fetchDashboardConfig(): Promise<Section[]> {
   if (!hasSpContext()) {
-    // Return mock data for dev environment without SharePoint
-    return getLocalConfig();
+    return getLocalConfigFromStorage();
   }
 
   try {
@@ -267,6 +336,18 @@ export async function saveMetricData(metricId: string, dateIso: string, data?: a
   } catch (err) {
     console.error("Error saving metric data to SP:", err);
   }
+}
+
+function getLocalConfigFromStorage(): Section[] {
+  const saved = localStorage.getItem('dash_config_mock');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return getLocalConfig();
+    }
+  }
+  return getLocalConfig();
 }
 
 function getLocalConfig(): Section[] {

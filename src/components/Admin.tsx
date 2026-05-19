@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Section, Metric } from '../types';
 import { 
   fetchDashboardConfig, 
+  ensureSharePointConfig,
   addDivision, 
   updateDivision, 
   deleteDivision, 
@@ -36,6 +37,7 @@ export function Admin() {
 
   const loadConfig = async () => {
     setIsLoading(true);
+    await ensureSharePointConfig();
     const data = await fetchDashboardConfig();
     setSections(data);
     setIsLoading(false);
