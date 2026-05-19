@@ -284,7 +284,7 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
       id: String(div.Id),
       title: div.Title,
       metrics: cards
-        .filter((c: any) => c.DivisionId === div.Id)
+        .filter((c: any) => Number(c.DivisionId) === Number(div.Id))
         .map((c: any) => {
           let cachedDetails: any[] = [];
           let cachedValue: number = 0;

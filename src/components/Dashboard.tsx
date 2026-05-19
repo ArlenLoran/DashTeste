@@ -537,11 +537,37 @@ export function Dashboard() {
     initApp();
   }, []);
 
-  const fetchAllData = async (forceResetTimers = false) => {
-    if (data.length === 0) return;
+  const refreshData = async () => {
     setIsRefreshing(true);
+    try {
+      const config = await fetchDashboardConfig();
+      setData(config);
+      
+      // Update layout config if new sections appeared
+      setLayoutConfig(prev => {
+        const newConfigs = [...prev];
+        config.forEach(s => {
+          if (!newConfigs.find(c => c.title === s.title)) {
+            newConfigs.push({ title: s.title, width: 33.33 });
+          }
+        });
+        return newConfigs;
+      });
+
+      // Now fetch the data for these metrics
+      // We call fetchAllDataInternal with the newly fetched config to be safe
+      await fetchAllDataInternal(config);
+    } catch (err) {
+      console.error("Refresh error:", err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const fetchAllDataInternal = async (configRef: Section[]) => {
+    if (configRef.length === 0) return;
     const fetchPromises: { promise: Promise<any>, sectionIdx: number, metricIdx: number, metric: Metric }[] = [];
-    data.forEach((section, sIdx) => {
+    configRef.forEach((section, sIdx) => {
       section.metrics.forEach((metric, mIdx) => {
         if (metric.sqlQuery) {
           fetchPromises.push({ promise: postSqlQuery(metric.sqlQuery, metric.id), sectionIdx: sIdx, metricIdx: mIdx, metric });
@@ -555,35 +581,43 @@ export function Dashboard() {
       const nowIso = now.toISOString();
       const nowString = now.toLocaleString('pt-BR');
       const metricsToUpdate: any[] = [];
+      
       setData(current => {
         const updated = [...current];
         results.forEach((res, i) => {
           const { sectionIdx, metricIdx, metric } = fetchPromises[i];
-          const rowCount = Array.isArray(res) ? res.length : 0;
-          const updatedHistory = [rowCount, ...(metric.history || [])].slice(0, 10);
-          updated[sectionIdx].metrics[metricIdx] = {
-            ...updated[sectionIdx].metrics[metricIdx],
-            value: rowCount,
-            details: Array.isArray(res) ? res : [],
-            lastUpdate: nowString,
-            lastUpdateAt: nowIso,
-            status: rowCount > 0 ? 'error' : 'ok',
-            history: updatedHistory
-          };
-          metricsToUpdate.push({ id: metric.id, iso: nowIso, result: res, history: updatedHistory });
+          // Ensure we are updating the right item in case 'current' is newer
+          if (updated[sectionIdx] && updated[sectionIdx].metrics[metricIdx]) {
+            const rowCount = Array.isArray(res) ? res.length : 0;
+            const updatedHistory = [rowCount, ...(metric.history || [])].slice(0, 10);
+            updated[sectionIdx].metrics[metricIdx] = {
+              ...updated[sectionIdx].metrics[metricIdx],
+              value: rowCount,
+              details: Array.isArray(res) ? res : [],
+              lastUpdate: nowString,
+              lastUpdateAt: nowIso,
+              status: rowCount > 0 ? 'error' : 'ok',
+              history: updatedHistory
+            };
+            metricsToUpdate.push({ id: metric.id, iso: nowIso, result: res, history: updatedHistory });
+          }
         });
         return updated;
       });
       metricsToUpdate.forEach(m => saveMetricData(m.id, m.iso, m.result, m.history));
-      setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: "Sincroniza\u00E7\u00E3o completada com sucesso.", time: new Date().toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
+      setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: "Sincronização completada com sucesso.", time: new Date().toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
     } catch (err) {
       console.error("Data fetch error:", err);
-    } finally { setIsRefreshing(false); }
+    }
   };
 
-  useEffect(() => { if (data.length > 0 && !isRefreshing) fetchAllData(); }, [data.length]);
+  const fetchAllData = () => fetchAllDataInternal(data);
 
-  const refreshData = () => fetchAllData(true);
+  useEffect(() => { 
+    if (data.length > 0 && !isRefreshing) {
+      fetchAllData();
+    } 
+  }, [data.length]);
 
   const refreshSingleMetric = async (metric: Metric) => {
     if (!metric.sqlQuery || isRefreshing) return;
@@ -596,7 +630,7 @@ export function Dashboard() {
       setData(current => {
         const updated = [...current];
         for (let sIdx = 0; sIdx < updated.length; sIdx++) {
-          const mIdx = updated[sIdx].metrics.findIndex(m => m.id === metric.id);
+          const mIdx = updated[sIdx].metrics.findIndex(m => Number(m.id) === Number(metric.id));
           if (mIdx !== -1) {
             const currentMetric = updated[sIdx].metrics[mIdx];
             updatedHistory = [rowCount, ...(currentMetric.history || [])].slice(0, 10);
