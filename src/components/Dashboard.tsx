@@ -522,17 +522,27 @@ export function Dashboard() {
       await ensureSharePointConfig();
       const config = await fetchDashboardConfig();
       setData(config);
+      
       const savedLayout = localStorage.getItem('dashboard_layout');
+      let currentLayout: {title: string, width: number}[] = [];
+      
       if (savedLayout) {
         try {
-          const parsed = JSON.parse(savedLayout);
-          setLayoutConfig(parsed);
+          currentLayout = JSON.parse(savedLayout);
+          // Add missing sections from config to layout
+          config.forEach(s => {
+            if (!currentLayout.find(c => c.title === s.title)) {
+              currentLayout.push({ title: s.title, width: 33.33 });
+            }
+          });
         } catch (e) {
-          setLayoutConfig(config.map(s => ({ title: s.title, width: 33.33 })));
+          currentLayout = config.map(s => ({ title: s.title, width: 33.33 }));
         }
       } else {
-        setLayoutConfig(config.map(s => ({ title: s.title, width: 33.33 })));
+        currentLayout = config.map(s => ({ title: s.title, width: 33.33 }));
       }
+      
+      setLayoutConfig(currentLayout);
     };
     initApp();
   }, []);
@@ -554,8 +564,6 @@ export function Dashboard() {
         return newConfigs;
       });
 
-      // Now fetch the data for these metrics
-      // We call fetchAllDataInternal with the newly fetched config to be safe
       await fetchAllDataInternal(config);
     } catch (err) {
       console.error("Refresh error:", err);
@@ -661,15 +669,41 @@ export function Dashboard() {
   const handleWidthChange = (title: string, width: number) => { setLayoutConfig(prev => prev.map(c => c.title === title ? { ...c, width } : c)); };
 
   const getPackedSections = () => {
-    const sectionsWithConfig = layoutConfig.map(c => ({ config: c, section: data.find(s => s.title === c.title)! })).filter(x => x.section);
-    const result: (typeof sectionsWithConfig[0])[] = [];
+    if (!data || data.length === 0) return [];
+    
+    // Map all sections in data to their config if it exists, or a default config
+    const sectionsWithConfig = data.map(section => {
+      // Try to find config by title (we could use ID in the future if we ensured all sections had one)
+      const config = layoutConfig.find(c => c.title === section.title) || { title: section.title, width: 33.33 };
+      return { config, section };
+    });
+
+    const result: { config: { title: string, width: number }, section: Section }[] = [];
     const remaining = [...sectionsWithConfig];
+    
     while (remaining.length > 0) {
       let currentRowWidth = 0;
       const rowIndices: number[] = [];
-      for (let i = 0; i < remaining.length; i++) { if (currentRowWidth + remaining[i].config.width <= 100.1) { currentRowWidth += remaining[i].config.width; rowIndices.push(i); } }
-      rowIndices.sort((a, b) => b - a).forEach(idx => { result.push(remaining[idx]); remaining.splice(idx, 1); });
-      if (rowIndices.length === 0 && remaining.length > 0) result.push(remaining.shift()!);
+      
+      for (let i = 0; i < remaining.length; i++) { 
+        if (currentRowWidth + remaining[i].config.width <= 100.1) { 
+          currentRowWidth += remaining[i].config.width; 
+          rowIndices.push(i); 
+        } 
+      }
+      
+      if (rowIndices.length === 0 && remaining.length > 0) {
+        // Current section is too wide for any row, force it as 100% or just add it
+        const first = remaining.shift()!;
+        result.push(first);
+        continue;
+      }
+
+      // Sort indices descending to splice safely
+      rowIndices.sort((a, b) => b - a).forEach(idx => { 
+        result.push(remaining[idx]); 
+        remaining.splice(idx, 1); 
+      });
     }
     return result;
   };
