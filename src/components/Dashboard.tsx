@@ -729,132 +729,177 @@ export function Dashboard() {
         const columns = Object.keys(details[0]).slice(0, 5);
         
         const headerHtml = columns.map(c => `
-          <th style="padding: 10px 8px; border-bottom: 2px solid #e2e8f0; text-align: left; font-size: 11px; text-transform: uppercase; color: #475569; font-weight: 700; letter-spacing: 0.5px;">${c}</th>
+          <th align="left" style="padding:12px 16px; border-bottom:2px solid #f3f4f6; font-size:10px; color:#6b7280; text-transform:uppercase; font-weight:bold; letter-spacing:1px;">${c}</th>
         `).join('');
         
         const rowsHtml = details.slice(0, 15).map((row, idx) => {
           const cells = columns.map(c => {
             const rawVal = row[c];
             const val = rawVal === null || rawVal === undefined ? '' : typeof rawVal === 'object' ? JSON.stringify(rawVal) : String(rawVal);
-            return `<td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 11px; color: #475569; font-family: monospace;">${val}</td>`;
+            return `<td style="padding:12px 16px; font-size:11px; color:#111827; line-height:1.5; border-bottom:1px solid #f3f4f6; font-family:monospace;">${val}</td>`;
           }).join('');
-          const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+          const bg = idx % 2 === 0 ? '#ffffff' : '#f9fafb';
           return `<tr style="background-color: ${bg};">${cells}</tr>`;
         }).join('');
 
         const truncateWarning = details.length > 15 
-          ? `<tr><td colspan="${columns.length}" style="text-align: center; padding: 12px; color: #ef4444; font-size: 11px; font-weight: 600; background-color: #fef2f2; border-top: 1px dashed #fee2e2;">Exibindo os 15 primeiros registros. A planilha completa com todos os ${details.length} desvios foi anexada (.xlsx).</td></tr>`
-          : `<tr><td colspan="${columns.length}" style="text-align: center; padding: 10px; color: #10b981; font-size: 10px; font-weight: bold; background-color: #f0fdf4; border-top: 1px dashed #dcfce7; text-transform: uppercase; letter-spacing: 0.5px;">Todos os ${details.length} registros foram detectados e listados acima.</td></tr>`;
+          ? `<tr><td colspan="${columns.length}" style="text-align: center; padding: 14px 16px; color: #d40511; font-size: 11px; font-weight: bold; background-color: #fef2f2; border-top: 1px dashed #fee2e2;">Exibindo os 15 primeiros registros. A planilha completa (.xlsx) com todos os ${details.length} desvios foi anexada.</td></tr>`
+          : `<tr><td colspan="${columns.length}" style="text-align: center; padding: 12px 16px; color: #10b981; font-size: 10px; font-weight: bold; background-color: #f0fdf4; border-top: 1px dashed #dcfce7; text-transform: uppercase;">Todos os ${details.length} registros listados acima. Planilha completa em anexo.</td></tr>`;
 
         tableRowsHtml = `
-          <div style="margin: 12px 0; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-            <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-              <thead>
-                <tr style="background-color: #f8fafc;">${headerHtml}</tr>
-              </thead>
-              <tbody>${rowsHtml}${truncateWarning}</tbody>
-            </table>
-          </div>
+          <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background-color:#ffffff; margin-bottom:20px;">
+            <thead>
+              <tr style="background-color:#f9fafb;">
+                ${headerHtml}
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+              ${truncateWarning}
+            </tbody>
+          </table>
         `;
       } else {
-        tableRowsHtml = `<p style="color: #64748b; font-style: italic; background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px dashed #cbd5e1; font-size: 13px; text-align: center;">Nenhum detalhe adicional disponível para esta divergência.</p>`;
+        tableRowsHtml = `<p style="color: #64748b; font-style: italic; background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px dashed #cbd5e1; font-size: 13px; text-align: center; margin-bottom:20px;">Nenhum detalhe adicional disponível para esta divergência.</p>`;
       }
 
       const bodyHtml = `
         <!DOCTYPE html>
-        <html>
+        <html lang="pt-BR">
         <head>
-          <meta charset="utf-8">
-          <title>[ALERTA] Divergência Operacional</title>
+          <meta charset="UTF-8">
+          <title>Divergência Detectada</title>
         </head>
-        <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-          <div style="background-color: #f8fafc; padding: 30px 15px; color: #1e293b;">
-            <!-- Container principal -->
-            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);">
-              
-              <!-- Linha superior de destaque (Vermelho de Alerta) -->
-              <div style="background-color: #ef4444; height: 4px;"></div>
-              
-              <!-- Cabeçalho Principal -->
-              <div style="padding: 30px; border-bottom: 1px solid #f1f5f9;">
-                <table style="width: 100%; border-collapse: collapse;">
+        <body style="margin:0; padding:0; background-color:#f8f9fa; font-family:Arial, Helvetica, sans-serif;">
+          <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8f9fa; border-collapse:collapse;">
+            <tr>
+              <td align="center" style="padding:40px 10px;">
+                <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color:#ffffff; border-collapse:collapse; border-radius:24px; border:1px solid #e5e7eb; overflow:hidden; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
+
                   <tr>
-                    <td>
-                      <span style="font-size: 11px; font-weight: 700; color: #ef4444; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 6px;">SISTEMA DE ALERTA OPERACIONAL</span>
-                      <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: -0.5px;">
-                        DHL Supply Chain
-                      </h1>
-                    </td>
-                    <td style="text-align: right; vertical-align: middle;">
-                      <span style="background-color: #fef2f2; border: 1px solid #fee2e2; color: #991b1b; font-size: 10px; font-weight: 700; padding: 6px 12px; border-radius: 6px; display: inline-block;">
-                        Divergência Ativa
-                      </span>
+                    <td style="background-color:#1a1a1a; padding:0;">
+                      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;">
+                        <tr>
+                          <td height="6" bgcolor="#d40511" style="font-size:1px; line-height:6px;">&nbsp;</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:30px 40px;">
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;">
+                              <tr>
+                                <td>
+                                  <div style="color:#ffcc00; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:2px; margin-bottom:8px;">ALERTA DE SISTEMA</div>
+                                  <h1 style="color:#ffffff; margin:0; font-size:24px; font-weight:bold; text-transform:uppercase; line-height:1.2; letter-spacing:-1px;">
+                                    Divergência <br><span style="color:#d40511;">Detectada</span>
+                                  </h1>
+                                </td>
+                                <td align="right" style="vertical-align:middle;">
+                                  <div style="border:1px solid #333333; padding:8px 12px; border-radius:8px; background-color:#262626; color:#ffffff; font-size:10px; font-weight:bold; text-transform:uppercase; letter-spacing:1px;">
+                                    SLAs Monitor
+                                  </div>
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
                     </td>
                   </tr>
+
+                  <tr>
+                    <td style="padding:40px;">
+                      <p style="margin:0 0 16px 0; font-size:18px; color:#111827; font-weight:bold;">
+                        Olá Equipe,
+                      </p>
+
+                      <p style="margin:0 0 32px 0; font-size:15px; color:#4b5563; line-height:1.6;">
+                        O sistema identificou divergências no monitoramento operacional da métrica selecionada. Por favor, revise os dados abaixo e as planilhas completas enviadas em anexo.
+                      </p>
+
+                      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#ffffff; border-collapse:collapse; border:1px solid #f3f4f6; border-radius:16px; margin-bottom:32px;">
+                        <tr>
+                          <td style="padding:24px; border-radius:16px; border:1px solid #f3f4f6;">
+                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;">
+                              <tr>
+                                <td style="padding-bottom:20px;">
+                                  <div style="font-size:10px; color:#9ca3af; text-transform:uppercase; font-weight:900; letter-spacing:1px; margin-bottom:6px;">
+                                    MÉTRICA MONITORADA
+                                  </div>
+                                  <div style="font-size:16px; color:#111827; font-weight:bold; word-break:break-all;">
+                                    ${metricTitle}
+                                  </div>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td>
+                                  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;">
+                                    <tr>
+                                      <td width="100%" style="vertical-align:top;">
+                                        <div style="font-size:10px; color:#9ca3af; text-transform:uppercase; font-weight:900; letter-spacing:1px; margin-bottom:6px;">
+                                          QUANTIDADE DE DIVERGÊNCIAS
+                                        </div>
+                                        <div style="font-size:18px; color:#d40511; font-weight:bold;">
+                                          ${currentCount} registros de desvio
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  </table>
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <div style="margin-bottom:12px;">
+                        <span style="font-size:12px; color:#111827; text-transform:uppercase; font-weight:900; letter-spacing:1px;">
+                          Amostra das Divergências (MÁXIMO 15)
+                        </span>
+                      </div>
+
+                      ${tableRowsHtml}
+
+                      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f9fafb; border-collapse:collapse; border-radius:12px; border:1px solid #f3f4f6; margin-top:32px;">
+                        <tr>
+                          <td style="padding:24px;">
+                            <p style="margin:0; font-size:13px; color:#6b7280; line-height:1.6;">
+                              <strong style="color:#111827;">Ação necessária:</strong>
+                              A planilha Excel (.xlsx) com a listagem completa com todos os desvios foi gerada pelo sistema e anexada a este e-mail para análise integrada. Você também pode visualizar os dados atualizados clicando no link abaixo.
+                            </p>
+                            <div style="margin-top:20px; text-align:center;">
+                              <a href="${window.location.origin}" style="display:inline-block; background-color:#d40511; color:#ffffff; font-size:12px; font-weight:bold; padding:12px 24px; text-decoration:none; border-radius:8px; text-transform:uppercase; letter-spacing:1px; box-shadow:0 4px 10px rgba(212,5,17,0.25);">
+                                Acessar Painel Online
+                              </a>
+                            </div>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td style="padding:0 40px 40px 40px;">
+                      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid #f3f4f6; padding-top:32px; border-collapse:collapse;">
+                        <tr>
+                          <td align="center">
+                            <p style="margin:0; font-size:11px; color:#9ca3af; text-transform:uppercase; font-weight:900; letter-spacing:2px;">
+                              DHL Supply Chain • SISTEMA MONITOR OPERACIONAL
+                            </p>
+                            <p style="margin:4px 0 0 0; font-size:10px; color:#94a3b8;">
+                              Este e-mail é gerado automaticamente pelo robô de monitoramento de SLAs. Não responda a esta mensagem.
+                            </p>
+                            <p style="margin:8px 0 0 0; font-size:10px; color:#94a3b8; font-family:monospace;">
+                              Data e hora da detecção: ${new Date().toLocaleString('pt-BR')} (UTC)
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
                 </table>
-              </div>
-
-              <!-- Conteúdo do E-mail -->
-              <div style="padding: 30px;">
-                <p style="font-size: 15px; font-weight: 600; color: #0f172a; margin-top: 0; margin-bottom: 12px;">
-                  Olá, equipe de monitoramento,
-                </p>
-                <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px 0;">
-                  Identificamos um novo desvio operacional na métrica registrada abaixo. Por favor, verifique os detalhes para assegurar a conformidade operacional e os prazos de SLA acordados.
-                </p>
-
-                <!-- Card de Informações da Métrica -->
-                <div style="background-color: #f8fafc; border-left: 4px solid #ef4444; border-radius: 0 8px 8px 0; padding: 20px; margin-bottom: 24px;">
-                  <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                      <td style="padding-bottom: 8px;">
-                        <span style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block;">Métrica Afetada</span>
-                        <span style="font-size: 16px; font-weight: 700; color: #0f172a;">${metricTitle}</span>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                        <span style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block;">Divergências Detectadas</span>
-                        <span style="font-size: 14px; font-weight: 700; color: #b91c1c;">${currentCount} registros de desvios</span>
-                      </td>
-                    </tr>
-                  </table>
-                </div>
-
-                <!-- Seção de Registros -->
-                <h3 style="font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px 0;">
-                  Amostra das Divergências (Top 15)
-                </h3>
-
-                <!-- Tabela -->
-                ${tableRowsHtml}
-
-                <!-- Rodapé do Card Interno com Botão -->
-                <div style="margin-top: 24px; padding: 20px; text-align: center; background-color: #f8fafc; border-radius: 8px; border: 1px solid #f1f5f9;">
-                  <p style="font-size: 12px; line-height: 1.5; color: #64748b; margin: 0 0 16px 0;">
-                    A planilha com a listagem completa em formato Excel (.xlsx) foi gerada pelo sistema e está em anexo a esta notificação.
-                  </p>
-                  <a href="${window.location.origin}" style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 11px; font-weight: 700; padding: 12px 24px; text-decoration: none; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
-                    Acessar Painel Online
-                  </a>
-                </div>
-              </div>
-
-              <!-- Rodapé Externo -->
-              <div style="background-color: #f8fafc; border-top: 1px solid #f1f5f9; padding: 24px 30px; text-align: center;">
-                <p style="font-size: 11px; font-weight: 600; color: #64748b; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">
-                  Painel de Monitoramento de SLAs
-                </p>
-                <p style="font-size: 10px; color: #94a3b8; margin: 0 0 12px 0;">
-                  Notificação automática. Por favor, não responda a este e-mail.
-                </p>
-                <p style="font-size: 10px; color: #94a3b8; margin: 0;">
-                  Gerado em: ${new Date().toLocaleString('pt-BR')} (UTC)
-                </p>
-              </div>
-
-            </div>
-          </div>
+              </td>
+            </tr>
+          </table>
         </body>
         </html>
       `;
