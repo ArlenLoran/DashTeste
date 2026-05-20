@@ -85,7 +85,13 @@ async function startServer() {
       if (!query) {
         return res.status(400).json({ error: "Missing query in request body" });
       }
-      const API_URL = process.env.POWER_AUTOMATE_URL || "https://51a805d34213e248a3506f5db8fe28.55.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/655aac37bdea49b1b1221a2f37198754/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=-2l0x4h5cwmpZ20RCIbMrzaR0860ka4aB8_dDOVQQHQ";
+      
+      let API_URL = process.env.POWER_AUTOMATE_URL;
+      if (!API_URL || !API_URL.startsWith("https://") || API_URL.includes("POWER_AUTOMATE_URL")) {
+        API_URL = "https://51a805d34213e248a3506f5db8fe28.55.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/655aac37bdea49b1b1221a2f37198754/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=-2l0x4h5cwmpZ20RCIbMrzaR0860ka4aB8_dDOVQQHQ";
+      }
+
+      console.log("Proxying query through Express server to:", API_URL);
 
       const response = await fetch(API_URL, {
         method: "POST",
@@ -115,7 +121,12 @@ async function startServer() {
     try {
       const { emails, Title, BodyEmail, Attachments } = req.body || {};
       
-      const EMAIL_URL = process.env.POWER_AUTOMATE_EMAIL_URL || "https://51a805d34213e248a3506f5db8fe28.55.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3e998fbce06445cdae41e91bfa5547de/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=6ujIHRbfYrL4_kZ9ZWcuu_LkL9TZyUWMs-VJes1U-As";
+      let EMAIL_URL = process.env.POWER_AUTOMATE_EMAIL_URL;
+      if (!EMAIL_URL || !EMAIL_URL.startsWith("https://") || EMAIL_URL.includes("POWER_AUTOMATE_EMAIL_URL")) {
+        EMAIL_URL = "https://51a805d34213e248a3506f5db8fe28.55.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3e998fbce06445cdae41e91bfa5547de/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=6ujIHRbfYrL4_kZ9ZWcuu_LkL9TZyUWMs-VJes1U-As";
+      }
+
+      console.log("Proxying email through Express server to:", EMAIL_URL);
 
       const response = await fetch(EMAIL_URL, {
         method: "POST",

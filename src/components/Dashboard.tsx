@@ -672,7 +672,27 @@ export function Dashboard() {
         return;
       }
 
-      // Build modern, stylish HTML body with dark slate design
+      // Generate Excel attachment as Base64 using XLSX
+      let attachmentsArray: { Name: string; ContentBytes: string }[] = [];
+      if (details && details.length > 0) {
+        try {
+          const worksheet = XLSX.utils.json_to_sheet(details);
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Divergências");
+          const excelBase64 = XLSX.write(workbook, { bookType: 'xlsx', type: 'base64' });
+          if (excelBase64) {
+            attachmentsArray.push({
+              Name: `Divergencias_${metricTitle.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`,
+              ContentBytes: excelBase64
+            });
+            console.log("Anexo Excel gerado com sucesso em Base64!");
+          }
+        } catch (excelErr) {
+          console.error("Erro ao gerar anexo Excel em Base64:", excelErr);
+        }
+      }
+
+      // Build modern, stylish HTML body with a premium dark slate/crimson design
       let tableRowsHtml = '';
       if (details && details.length > 0) {
         const columns = Object.keys(details[0]).slice(0, 6);
@@ -685,15 +705,15 @@ export function Dashboard() {
           const cells = columns.map(c => {
             const rawVal = row[c];
             const val = rawVal === null || rawVal === undefined ? '' : typeof rawVal === 'object' ? JSON.stringify(rawVal) : String(rawVal);
-            return `<td style="padding: 10px; border-bottom: 1px solid #1e293b; font-size: 11px; color: #cbd5e1; font-family: 'JetBrains Mono', monospace;">${val}</td>`;
+            return `<td style="padding: 10px; border-bottom: 1px solid #1e293b; font-size: 11px; color: #cbd5e1; font-family: monospace;">${val}</td>`;
           }).join('');
           const bg = idx % 2 === 0 ? '#0f172a' : '#1e293b';
           return `<tr style="background-color: ${bg};">${cells}</tr>`;
         }).join('');
 
         const truncateWarning = details.length > 15 
-          ? `<tr><td colspan="${columns.length}" style="text-align: center; padding: 12px; color: #f43f5e; font-size: 11px; font-weight: 900; background-color: #881337; text-transform: uppercase; letter-spacing: 0.5px;">Exibindo apenas os 15 primeiros registros de um total de ${details.length} desvios.</td></tr>`
-          : '';
+          ? `<tr><td colspan="${columns.length}" style="text-align: center; padding: 12px; color: #f43f5e; font-size: 11px; font-weight: 900; background-color: #881337; text-transform: uppercase; letter-spacing: 0.5px;">Exibindo os 15 primeiros registros na tabela. A base de dados completa (total de ${details.length} desvios) foi anexada em formato Excel neste e-mail.</td></tr>`
+          : '<tr><td colspan="' + columns.length + '" style="text-align: center; padding: 12px; color: #10b981; font-size: 10px; font-weight: 900; background-color: rgba(16, 185, 129, 0.1); text-transform: uppercase; letter-spacing: 0.5px;">A base completa de divergências também foi anexada em formato .xlsx neste e-mail.</td></tr>';
 
         tableRowsHtml = `
           <div style="margin-top: 20px; border-radius: 12px; overflow: hidden; border: 1px solid #ef4444; box-shadow: 0 4px 20px rgba(220, 38, 38, 0.15);">
@@ -710,41 +730,42 @@ export function Dashboard() {
       }
 
       const bodyHtml = `
-        <div style="font-family: 'Inter', -apple-system, sans-serif; background-color: #020617; color: #f8fafc; padding: 40px 30px; border-radius: 16px; max-width: 650px; margin: 20px auto; border: 1px solid #ef4444;">
+        <div style="font-family: Arial, sans-serif; background-color: #020617; color: #f8fafc; padding: 40px 30px; border-radius: 16px; max-width: 650px; margin: 20px auto; border: 1px solid #ef4444;">
           <table style="width: 100%;">
             <tr>
               <td>
-                <span style="background-color: #fca5a5; color: #991b1b; font-size: 9px; font-weight: 900; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1.5px; display: inline-block;">SISTEMA DE MONITORAMENTO</span>
-                <h1 style="color: #ffffff; font-size: 22px; font-weight: 800; margin: 12px 0 4px 0; font-style: italic; text-transform: uppercase; tracking: -0.5px;">MONITOR <span style="color: #ef4444;">OPERACIONAL</span></h1>
+                <span style="background-color: #fca5a5; color: #991b1b; font-size: 9px; font-weight: 950; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1.5px; display: inline-block;">SISTEMA DE MONITORAMENTO</span>
+                <h1 style="color: #ffffff; font-size: 22px; font-weight: 900; margin: 12px 0 4px 0; font-style: italic; text-transform: uppercase; tracking: -0.5px;">MONITOR <span style="color: #ef4444;">OPERACIONAL</span></h1>
                 <p style="color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 20px 0;">Controle de desvios operacionais em tempo real</p>
               </td>
               <td style="text-align: right; vertical-align: top;">
-                <span style="color: #ef4444; font-size: 18px; font-weight: bold;">🔴 ATENÇÃO</span>
+                <span style="color: #ef4444; font-size: 18px; font-weight: bold;">🔴 ALERTA DE DESVIO</span>
               </td>
             </tr>
           </table>
 
-          <div style="border-top: 1px solid #334155; padding-top: 24px; margin-top: 10px;">
+          <div style="border-top: 1px solid #1e293b; padding-top: 24px; margin-top: 10px;">
             <p style="color: #e2e8f0; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
               Olá, equipe operacional do painel.
             </p>
             <p style="color: #cbd5e1; font-size: 13px; line-height: 1.6; margin: 0 0 20px 0;">
-              Foi detectada uma <strong>nova divergência operacional ativa</strong> no módulo de controle. Recomendamos a investigação imediata dos dados abaixo:
+              Foi identificada uma <strong>nova divergência ativa</strong> no monitoramento do sistema. Verifique os detalhes e analise a causa raiz com máxima prioridade.
             </p>
             
-            <div style="background: rgba(220, 38, 38, 0.1); border-left: 4px solid #ef4444; padding: 15px; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
-              <span style="color: #94a3b8; font-size: 9px; font-weight: bold; text-transform: uppercase; tracking: 1px; display: block; margin-bottom: 4px;">MÉTRICA COM DIVERGÊNCIA</span>
-              <span style="color: #ffffff; font-size: 16px; font-weight: 800; font-style: italic; text-transform: uppercase;">${metricTitle}</span>
-              <span style="color: #ef4444; font-size: 11px; font-weight: bold; display: block; margin-top: 6px;">Total de desvios na atualização: ${details.length}</span>
+            <div style="background: rgba(220, 38, 38, 0.1); border-left: 4px solid #ef4444; padding: 18px; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
+              <span style="color: #94a3b8; font-size: 9px; font-weight: bold; text-transform: uppercase; tracking: 1px; display: block; margin-bottom: 4px;">MÉTRICA AFETADA</span>
+              <span style="color: #ffffff; font-size: 18px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 0.25px;">${metricTitle}</span>
+              <span style="color: #ef4444; font-size: 12px; font-weight: 900; display: block; margin-top: 8px;">Total de desvios detectados: ${details.length}</span>
             </div>
 
-            <h3 style="color: #ffffff; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px 0;">AMOSTRA DA TABELA DE DETALHES</h3>
+            <h3 style="color: #ffffff; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px 0;">AMOSTRA DOS REGISTROS DA DIVERGÊNCIA</h3>
             ${tableRowsHtml}
           </div>
 
-          <div style="margin-top: 35px; text-align: center;">
+          <div style="margin-top: 35px; text-align: center; border-top: 1px dashed #1e293b; padding-top: 25px;">
+            <p style="color: #94a3b8; font-size: 11px; margin-bottom: 15px;">Use o anexo de planilha enviado nesta notificação para ver todos os detalhes.</p>
             <a href="${window.location.origin}" style="display: inline-block; background-color: #ef4444; color: #ffffff; font-size: 11px; font-weight: 900; padding: 14px 28px; text-decoration: none; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">
-              Acessar Painel de Controle
+              Acessar Painel Online
             </a>
           </div>
 
@@ -765,7 +786,7 @@ export function Dashboard() {
           emails: emailListString,
           Title,
           BodyEmail: bodyHtml,
-          Attachments: []
+          Attachments: attachmentsArray
         })
       });
 
@@ -773,8 +794,8 @@ export function Dashboard() {
         throw new Error(`Servidor de e-mail retornou status: ${response.status}`);
       }
 
-      console.log(`E-mail com tabela enviado com sucesso para: ${emailListString}`);
-      setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `E-mail de desvio enviado à lista para a métrica "${metricTitle}".`, time: new Date().toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
+      console.log(`E-mail com planilha Excel anexada enviado com sucesso para: ${emailListString}`);
+      setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `E-mail de desvio enviado à lista com planilha Excel anexada para "${metricTitle}".`, time: new Date().toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
     } catch (error: any) {
       console.error("Erro ao tentar enviar e-mail via Power Automate:", error);
       setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `Falha no envio de e-mail (${metricTitle}): ${error.message || error}`, time: new Date().toLocaleTimeString('pt-BR'), type: 'critical' as const }, ...prev] as any).slice(0, 50));
