@@ -915,15 +915,23 @@ export function Dashboard() {
 
       <button 
         onClick={() => setIsWarRoom(!isWarRoom)} 
-        className={`fixed bottom-[100px] right-8 z-50 p-4 rounded-2xl shadow-2xl flex items-center gap-3 transition-all active:scale-95 group overflow-hidden ${isWarRoom ? 'bg-brand-red text-white hover:bg-red-600 shadow-[0_10px_30px_rgba(204,0,0,0.5)]' : 'bg-[#0f1125] text-white hover:bg-slate-900 shadow-[0_10px_30px_rgba(0,0,0,0.3)]'}`}
+        className={`fixed bottom-[100px] right-8 z-50 h-14 w-14 hover:w-[250px] rounded-2xl shadow-2xl flex items-center p-4 transition-all duration-300 ease-in-out active:scale-95 group overflow-hidden ${isWarRoom ? 'bg-brand-red text-white hover:bg-red-600 shadow-[0_10px_30px_rgba(204,0,0,0.5)]' : 'bg-[#0f1125] text-white hover:bg-slate-900 shadow-[0_10px_30px_rgba(0,0,0,0.3)]'}`}
       >
-        <Activity className={`w-6 h-6 ${isWarRoom ? 'animate-pulse text-white' : 'text-brand-red'}`} />
-        <span className="font-black text-xs uppercase tracking-widest pr-2 border-l border-white/20 pl-3">
+        <Activity className={`w-6 h-6 flex-shrink-0 ${isWarRoom ? 'animate-pulse text-white' : 'text-brand-red'}`} />
+        <span className="font-black text-xs uppercase tracking-widest border-l border-white/20 pl-3 ml-0 group-hover:ml-3 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none max-w-0 group-hover:max-w-xs overflow-hidden">
           {isWarRoom ? 'Sair do Modo War Room' : 'Ativar Modo War Room'}
         </span>
       </button>
 
-      <button onClick={() => setIsSettingsOpen(true)} className={`fixed bottom-8 right-8 z-50 p-4 rounded-2xl shadow-2xl flex items-center gap-3 transition-all active:scale-95 group overflow-hidden ${isWarRoom ? 'bg-brand-red text-white hover:bg-red-600 shadow-[0_10px_30px_rgba(204,0,0,0.5)]' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-[0_10px_30px_rgba(0,0,0,0.3)]'}`}><Settings className="w-6 h-6 group-hover:rotate-180 transition-transform duration-700" /><span className="font-black text-xs uppercase tracking-widest pr-2 border-l border-white/20 pl-3">Ajustar Dashboard</span></button>
+      <button 
+        onClick={() => setIsSettingsOpen(true)} 
+        className={`fixed bottom-8 right-8 z-50 h-14 w-14 hover:w-[220px] rounded-2xl shadow-2xl flex items-center p-4 transition-all duration-300 ease-in-out active:scale-95 group overflow-hidden ${isWarRoom ? 'bg-brand-red text-white hover:bg-red-600 shadow-[0_10px_30px_rgba(204,0,0,0.5)]' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-[0_10px_30px_rgba(0,0,0,0.3)]'}`}
+      >
+        <Settings className="w-6 h-6 flex-shrink-0 group-hover:rotate-180 transition-transform duration-700" />
+        <span className="font-black text-xs uppercase tracking-widest border-l border-white/20 pl-3 ml-0 group-hover:ml-3 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none max-w-0 group-hover:max-w-xs overflow-hidden">
+          Ajustar Dashboard
+        </span>
+      </button>
       <footer className={`text-center text-[10px] py-10 border-t mt-12 transition-colors duration-500 mx-auto w-full ${isWarRoom ? 'border-indigo-950 text-indigo-900 max-w-[1700px]' : 'border-slate-200 text-slate-400 max-w-[1400px]'}`}>&copy; {new Date().getFullYear()} Monitoring System - Todos os direitos reservados</footer>
     </main>
   );

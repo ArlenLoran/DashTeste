@@ -293,38 +293,38 @@ export function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8">
-      <header className="max-w-6xl mx-auto flex justify-between items-center mb-12">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-slate-900 rounded-2xl text-white">
-            <Settings className="w-8 h-8" />
+    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 sm:p-8">
+      <header className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 md:mb-12">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="p-2.5 sm:p-3 bg-slate-900 rounded-2xl text-white">
+            <Settings className="w-6 h-6 sm:w-8 sm:h-8" />
           </div>
           <div>
-            <h1 className="text-3xl font-black uppercase italic tracking-tighter">Painel administrativo</h1>
+            <h1 className="text-2xl sm:text-3xl font-black uppercase italic tracking-tighter">Painel administrativo</h1>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Gerenciamento de Estrutura & Métricas</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full md:w-auto">
           <button 
             onClick={() => setIsAccessModalOpen(true)} 
-            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all cursor-pointer"
+            className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all cursor-pointer"
           >
             <Shield className="w-4 h-4 text-brand-red animate-pulse" /> Gerenciar Acessos
           </button>
-          <a href="/" className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">
+          <a href="/" className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">
             <ArrowLeft className="w-4 h-4" /> Voltar ao Dashboard
           </a>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto space-y-8 pb-32">
-        <div className="flex justify-between items-center">
-          <h2 className="text-xl font-black uppercase italic tracking-tight flex items-center gap-2">
+      <main className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-32">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h2 className="text-lg sm:text-xl font-black uppercase italic tracking-tight flex items-center gap-2">
             <Layout className="w-5 h-5 text-brand-red" /> Divisões do Dashboard
           </h2>
           <button 
             onClick={() => { setEditingSection(null); setSectionTitle(''); setIsSectionModalOpen(true); }}
-            className="px-6 py-3 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
+            className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
           >
             <Plus className="w-4 h-4" /> Nova Divisão
           </button>
@@ -378,23 +378,23 @@ export function Admin() {
                   draggedSectionIndex === sIdx ? 'opacity-40 border-dashed border-brand-red scale-[0.99]' : 'border-slate-200'
                 }`}
               >
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                  <div className="flex items-center gap-4">
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
+                  <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
                     <div 
-                      className="text-slate-400 cursor-grab active:cursor-grabbing hover:text-slate-600 transition-colors p-1" 
+                      className="text-slate-400 cursor-grab active:cursor-grabbing hover:text-slate-600 transition-colors p-1 flex-shrink-0" 
                       title="Arraste para reordenar divisão"
                     >
                       <GripVertical className="w-5 h-5" />
                     </div>
-                    <div className="w-2 h-8 bg-brand-red rounded-full" />
-                    <h3 className="text-lg font-black uppercase italic tracking-tight">{section.title}</h3>
+                    <div className="w-1.5 h-6 sm:w-2 sm:h-8 bg-brand-red rounded-full flex-shrink-0" />
+                    <h3 className="text-base sm:text-lg font-black uppercase italic tracking-tight truncate">{section.title}</h3>
                   </div>
-                  <div className="flex gap-2 items-center">
-                    <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white mr-1">
+                  <div className="flex gap-2 items-center justify-between sm:justify-end w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
+                    <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white mr-1 flex-shrink-0">
                       <button 
                         onClick={() => handleMoveSection(sIdx, sIdx - 1)}
                         disabled={sIdx === 0}
-                        className="p-1.5 px-2.5 bg-white text-slate-400 hover:text-slate-800 disabled:opacity-30 hover:bg-slate-50 transition-all border-r border-slate-150 cursor-pointer"
+                        className="p-1 px-2.5 bg-white text-slate-400 hover:text-slate-800 disabled:opacity-30 hover:bg-slate-50 transition-all border-r border-slate-150 cursor-pointer"
                         title="Mover divisão para cima"
                       >
                         <ChevronUp className="w-4 h-4" />
@@ -402,41 +402,45 @@ export function Admin() {
                       <button 
                         onClick={() => handleMoveSection(sIdx, sIdx + 1)}
                         disabled={sIdx === sections.length - 1}
-                        className="p-1.5 px-2.5 bg-white text-slate-400 hover:text-slate-800 disabled:opacity-30 hover:bg-slate-50 transition-all cursor-pointer"
+                        className="p-1 px-2.5 bg-white text-slate-400 hover:text-slate-800 disabled:opacity-30 hover:bg-slate-50 transition-all cursor-pointer"
                         title="Mover divisão para baixo"
                       >
                         <ChevronDown className="w-4 h-4" />
                       </button>
                     </div>
-                    <button 
-                      onClick={() => { setEditingSection(section); setSectionTitle(section.title); setIsSectionModalOpen(true); }}
-                      className="p-2 text-slate-400 hover:text-slate-900 hover:bg-white rounded-lg transition-all"
-                    >
-                      <Edit2 className="w-5 h-5" />
-                    </button>
-                    <button 
-                      onClick={async () => {
-                        if (section.id && window.confirm(`Deseja realmente excluir a divisão "${section.title}"?`)) {
-                          try {
-                            setIsSaving(true);
-                            await deleteDivision(section.id);
-                            setStatusMessage({ type: 'success', text: 'Divisão excluída!' });
-                            loadConfig();
-                          } catch (err: any) {
-                            setStatusMessage({ type: 'error', text: `Erro ao excluir: ${err.message}` });
-                          } finally {
-                            setIsSaving(false);
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={() => { setEditingSection(section); setSectionTitle(section.title); setIsSectionModalOpen(true); }}
+                        className="p-2 text-slate-400 hover:text-slate-900 hover:bg-white rounded-lg transition-all"
+                        title="Editar divisão"
+                      >
+                        <Edit2 className="w-5 h-5" />
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          if (section.id && window.confirm(`Deseja realmente excluir a divisão "${section.title}"?`)) {
+                            try {
+                              setIsSaving(true);
+                              await deleteDivision(section.id);
+                              setStatusMessage({ type: 'success', text: 'Divisão excluída!' });
+                              loadConfig();
+                            } catch (err: any) {
+                              setStatusMessage({ type: 'error', text: `Erro ao excluir: ${err.message}` });
+                            } finally {
+                              setIsSaving(false);
+                            }
                           }
-                        }
-                      }}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                        }}
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all"
+                        title="Excluir divisão"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="p-6">
+                <div className="p-4 sm:p-6">
                   <div className="grid gap-4">
                     {section.metrics.map((metric, mIdx) => (
                       <div 
@@ -456,32 +460,32 @@ export function Admin() {
                           }
                           setDraggedMetricIndex(null);
                         }}
-                        className={`flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-slate-50 rounded-xl border gap-4 group transition-all duration-300 ${
+                        className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-3.5 sm:p-4 bg-slate-50 rounded-xl border gap-4 group transition-all duration-300 ${
                           draggedMetricIndex && draggedMetricIndex.sectionId === section.id! && draggedMetricIndex.index === mIdx
                             ? 'opacity-40 border-dashed border-brand-red scale-[0.99] border-brand-red bg-red-50/5'
                             : 'border-slate-100'
                         }`}
                       >
-                        <div className="flex items-center gap-4 w-full md:w-auto">
+                        <div className="flex items-center gap-2.5 sm:gap-4 w-full sm:w-auto">
                           <div 
                             className="text-slate-400 cursor-grab active:cursor-grabbing hover:text-slate-600 transition-colors p-1" 
                             title="Arraste para reordenar card"
                           >
                             <GripVertical className="w-4 h-4" />
                           </div>
-                          <div className="p-3 bg-white border border-slate-200 rounded-xl group-hover:border-brand-red transition-colors">
-                            <Activity className="w-5 h-5 text-slate-400 group-hover:text-brand-red" />
+                          <div className="p-2 sm:p-3 bg-white border border-slate-200 rounded-xl group-hover:border-brand-red transition-colors flex-shrink-0">
+                            <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 group-hover:text-brand-red" />
                           </div>
-                          <div>
-                            <h4 className="font-black text-slate-800 uppercase text-xs">{metric.title}</h4>
-                            <div className="flex gap-4 mt-1">
+                          <div className="min-w-0 flex-grow">
+                            <h4 className="font-black text-slate-800 uppercase text-xs truncate">{metric.title}</h4>
+                            <div className="flex gap-3 sm:gap-4 mt-1">
                               <span className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> a cada {metric.refreshInterval}m</span>
                               <span className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1"><Shield className="w-2.5 h-2.5" /> {metric.rules?.length || 0} regras</span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex gap-2 self-end md:self-auto items-center">
-                          <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white mr-1">
+                        <div className="flex flex-wrap gap-2 items-center justify-between sm:justify-end w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-200/60">
+                          <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white">
                             <button 
                               onClick={() => handleMoveMetric(section.id!, mIdx, mIdx - 1)}
                               disabled={mIdx === 0}
@@ -499,41 +503,43 @@ export function Admin() {
                               <ChevronDown className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                          <button 
-                            onClick={() => {
-                              setMetricForm({
-                                title: metric.title,
-                                objective: metric.objective || '',
-                                rules: metric.rules || [],
-                                sqlQuery: metric.sqlQuery || '',
-                                refreshInterval: metric.refreshInterval || 5
-                              });
-                              setEditingMetric({ metric, divisionId: section.id || '' });
-                              setIsMetricModalOpen(true);
-                            }}
-                            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2"
-                          >
-                            <Edit2 className="w-3 h-3" /> Editar
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              if (window.confirm(`Deseja realmente excluir o card "${metric.title}"?`)) {
-                                try {
-                                  setIsSaving(true);
-                                  await deleteMetric(metric.id);
-                                  setStatusMessage({ type: 'success', text: 'Card excluído!' });
-                                  loadConfig();
-                                } catch (err: any) {
-                                  setStatusMessage({ type: 'error', text: `Erro ao excluir: ${err.message}` });
-                                } finally {
-                                  setIsSaving(false);
+                          <div className="flex gap-1.5 ml-auto sm:ml-0">
+                            <button 
+                              onClick={() => {
+                                setMetricForm({
+                                  title: metric.title,
+                                  objective: metric.objective || '',
+                                  rules: metric.rules || [],
+                                  sqlQuery: metric.sqlQuery || '',
+                                  refreshInterval: metric.refreshInterval || 5
+                                });
+                                setEditingMetric({ metric, divisionId: section.id || '' });
+                                setIsMetricModalOpen(true);
+                              }}
+                              className="px-2.5 sm:px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-1.5"
+                            >
+                              <Edit2 className="w-3 h-3" /> Editar
+                            </button>
+                            <button 
+                              onClick={async () => {
+                                if (window.confirm(`Deseja realmente excluir o card "${metric.title}"?`)) {
+                                  try {
+                                    setIsSaving(true);
+                                    await deleteMetric(metric.id);
+                                    setStatusMessage({ type: 'success', text: 'Card excluído!' });
+                                    loadConfig();
+                                  } catch (err: any) {
+                                    setStatusMessage({ type: 'error', text: `Erro ao excluir: ${err.message}` });
+                                  } finally {
+                                    setIsSaving(false);
+                                  }
                                 }
-                              }
-                            }}
-                            className="px-4 py-2 bg-white border border-slate-200 text-red-500 rounded-lg font-black text-[10px] uppercase tracking-widest hover:border-red-100 hover:bg-red-50 transition-all flex items-center gap-2"
-                          >
-                            <Trash2 className="w-3 h-3" /> Excluir
-                          </button>
+                              }}
+                              className="px-2.5 sm:px-4 py-2 bg-white border border-slate-200 text-red-500 rounded-lg font-black text-[10px] uppercase tracking-widest hover:border-red-100 hover:bg-red-50 transition-all flex items-center gap-1.5"
+                            >
+                              <Trash2 className="w-3 h-3" /> Excluir
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -560,11 +566,11 @@ export function Admin() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
+              className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 w-full max-w-md shadow-2xl"
             >
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="text-2xl font-black uppercase italic tracking-tighter">{editingSection ? 'Editar Divisão' : 'Nova Divisão'}</h3>
-                <button onClick={() => setIsSectionModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full"><X className="w-6 h-6" /></button>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter">{editingSection ? 'Editar Divisão' : 'Nova Divisão'}</h3>
+                <button onClick={() => setIsSectionModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X className="w-5 h-5 sm:w-6 sm:h-6" /></button>
               </div>
               <div className="space-y-6">
                 <div>
@@ -574,15 +580,15 @@ export function Admin() {
                     value={sectionTitle}
                     onChange={(e) => setSectionTitle(e.target.value)}
                     placeholder="Ex: Qualidade Operacional"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold text-sm"
                   />
                 </div>
                 <button 
                   onClick={handleSaveSection}
                   disabled={isSaving}
-                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3.5 sm:py-4 bg-slate-900 text-white rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Save className={isSaving ? "w-5 h-5 animate-spin" : "w-5 h-5"} /> {isSaving ? 'Salvando...' : (editingSection ? 'Salvar Alterações' : 'Criar Divisão')}
+                  <Save className={isSaving ? "w-4 h-4 sm:w-5 sm:h-5 animate-spin" : "w-4 h-4 sm:w-5 sm:h-5"} /> {isSaving ? 'Salvando...' : (editingSection ? 'Salvar Alterações' : 'Criar Divisão')}
                 </button>
               </div>
             </motion.div>
@@ -593,33 +599,33 @@ export function Admin() {
       {/* Metric Modal */}
       <AnimatePresence>
         {isMetricModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div 
-              initial={{ opacity: 0, y: 50 }}
+              initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 50 }}
-              className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl"
+              exit={{ opacity: 0, y: 30 }}
+              className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl"
             >
-              <header className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <header className="p-5 sm:p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                 <div>
-                  <h3 className="text-2xl font-black uppercase italic tracking-tighter">
+                  <h3 className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter">
                     {editingMetric?.metric.id === 'new' ? 'Novo Card de Métrica' : 'Editar Card de Métrica'}
                   </h3>
-                  <p className="text-[10px] font-black text-slate-400 uppercase mt-1">Configuração dinâmica e persistência</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase mt-0.5">Configuração dinâmica e persistência</p>
                 </div>
-                <button onClick={() => setIsMetricModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X className="w-6 h-6" /></button>
+                <button onClick={() => setIsMetricModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X className="w-5 h-5 sm:w-6 sm:h-6" /></button>
               </header>
 
-              <div className="flex-grow overflow-y-auto p-8 space-y-8">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-6">
+              <div className="flex-grow overflow-y-auto p-5 sm:p-8 space-y-6 sm:space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+                  <div className="space-y-5 sm:space-y-6">
                     <div>
                       <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2"><Activity className="w-3 h-3" /> Título do Card</label>
                       <input 
                         type="text" 
                         value={metricForm.title}
                         onChange={(e) => setMetricForm({...metricForm, title: e.target.value})}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold text-sm"
                         placeholder="Ex: Divergência de Inventário"
                       />
                     </div>
@@ -629,7 +635,7 @@ export function Admin() {
                         type="number" 
                         value={metricForm.refreshInterval}
                         onChange={(e) => setMetricForm({...metricForm, refreshInterval: parseInt(e.target.value)})}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold text-sm"
                       />
                     </div>
                   </div>
@@ -639,7 +645,7 @@ export function Admin() {
                     <textarea 
                       value={metricForm.objective}
                       onChange={(e) => setMetricForm({...metricForm, objective: e.target.value})}
-                      className="w-full h-[120px] px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold resize-none"
+                      className="w-full h-[100px] md:h-[135px] px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold resize-none text-sm"
                       placeholder="Descreva o propósito desta métrica..."
                     />
                   </div>
@@ -650,11 +656,12 @@ export function Admin() {
                   <textarea 
                     value={metricForm.sqlQuery}
                     onChange={(e) => setMetricForm({...metricForm, sqlQuery: e.target.value})}
-                    className="w-full h-[150px] px-4 py-3 bg-slate-950 text-emerald-500 font-mono text-sm border-2 border-slate-800 rounded-xl outline-none focus:border-brand-red transition-all resize-none shadow-inner"
+                    className="w-full h-[120px] sm:h-[150px] px-4 py-3 bg-slate-950 text-emerald-500 font-mono text-xs sm:text-sm border-2 border-slate-800 rounded-xl outline-none focus:border-brand-red transition-all resize-none shadow-inner"
                     placeholder="SELECT * FROM TABELA WHERE..."
                   />
-                  <div className="mt-2 text-[9px] text-slate-400 font-bold uppercase p-3 bg-slate-100 rounded-lg flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-brand-red" /> Atuando em tempo real sobre a base do ERP selecionada nas configurações.
+                  <div className="mt-2 text-[9px] text-slate-400 font-bold uppercase p-3 bg-slate-100 rounded-lg flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-brand-red flex-shrink-0" /> 
+                    <span>Atuando em tempo real sobre a base do ERP selecionada nas configurações.</span>
                   </div>
                 </div>
 
@@ -671,14 +678,14 @@ export function Admin() {
                             newRules[idx] = e.target.value;
                             setMetricForm({...metricForm, rules: newRules});
                           }}
-                          className="flex-grow px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold"
+                          className="flex-grow px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-900 transition-all font-bold text-xs sm:text-sm"
                         />
-                        <button onClick={() => setMetricForm({...metricForm, rules: metricForm.rules.filter((_, i) => i !== idx)})} className="p-3 text-red-500 hover:bg-red-50 rounded-xl"><Trash2 className="w-5 h-5" /></button>
+                        <button onClick={() => setMetricForm({...metricForm, rules: metricForm.rules.filter((_, i) => i !== idx)})} className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer"><Trash2 className="w-4 h-4 sm:w-5 sm:h-5" /></button>
                       </div>
                     ))}
                     <button 
                       onClick={() => setMetricForm({...metricForm, rules: [...metricForm.rules, '']})}
-                      className="w-full py-3 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all font-black uppercase text-[10px] tracking-widest"
+                      className="w-full py-2.5 sm:py-3 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all font-black uppercase text-[10px] tracking-widest cursor-pointer"
                     >
                       + Adicionar Regra
                     </button>
@@ -686,12 +693,12 @@ export function Admin() {
                 </div>
               </div>
 
-              <footer className="p-8 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
-                <button onClick={() => setIsMetricModalOpen(false)} disabled={isSaving} className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all disabled:opacity-50">Cancelar</button>
+              <footer className="p-5 sm:p-8 border-t border-slate-100 bg-slate-50/50 flex flex-col-reverse sm:flex-row justify-end gap-2.5 sm:gap-3">
+                <button onClick={() => setIsMetricModalOpen(false)} disabled={isSaving} className="w-full sm:w-auto px-6 sm:px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all disabled:opacity-50">Cancelar</button>
                 <button 
                   onClick={handleSaveMetric}
                   disabled={isSaving}
-                  className="px-10 py-3 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto px-8 sm:px-10 py-3 bg-slate-900 text-white rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Save className={isSaving ? "w-4 h-4 animate-spin" : "w-4 h-4"} /> {isSaving ? 'Salvando...' : 'Salvar Card'}
                 </button>
@@ -709,47 +716,47 @@ export function Admin() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="rounded-3xl p-8 w-full max-w-lg shadow-2xl bg-white border border-slate-200 text-slate-900 overflow-hidden"
+              className="rounded-2xl sm:rounded-3xl p-5 sm:p-8 w-full max-w-lg shadow-2xl bg-white border border-slate-200 text-slate-900 overflow-hidden flex flex-col"
             >
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-red-50 text-brand-red">
-                    <Shield className="w-6 h-6" />
+              <div className="flex justify-between items-start gap-4 mb-6">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="p-2 rounded-xl bg-red-50 text-brand-red flex-shrink-0">
+                    <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black uppercase italic tracking-tighter">Controle de Acessos</h3>
-                    <p className="text-[9px] font-black uppercase mt-0.5 tracking-wider text-slate-400">Gerenciar e-mails permitidos</p>
+                    <h3 className="text-lg sm:text-xl font-black uppercase italic tracking-tighter leading-tight">Controle de acessos</h3>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-slate-400 mt-0.5">Gerenciar e-mails permitidos</p>
                   </div>
                 </div>
                 <button 
                   onClick={() => setIsAccessModalOpen(false)} 
-                  className="p-2 rounded-full transition-colors hover:bg-slate-100 text-slate-400 hover:text-slate-900"
+                  className="p-1.5 rounded-full transition-colors hover:bg-slate-100 text-slate-400 hover:text-slate-900 flex-shrink-0"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               {accessMessage && (
-                <div className={`p-3 rounded-xl text-xs font-bold uppercase tracking-wider mb-4 border ${accessMessage.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-red-50 border-red-100 text-red-600'}`}>
+                <div className={`p-3 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-4 border ${accessMessage.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-red-50 border-red-100 text-red-600'}`}>
                   {accessMessage.text}
                 </div>
               )}
 
               {/* Form to Add User */}
               <div className="mb-6">
-                <label className="block text-[9px] font-black uppercase tracking-widest mb-2 text-slate-400">Conceder Novo Acesso (E-mail)</label>
-                <div className="flex gap-2">
+                <label className="block text-[9px] font-black uppercase tracking-widest mb-1.5 text-slate-400">Conceder Novo Acesso (E-mail)</label>
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input 
                     type="email" 
                     value={newAccessEmail}
                     onChange={(e) => setNewAccessEmail(e.target.value)}
                     placeholder="Ex: usuario@empresa.com"
-                    className="flex-grow px-4 py-3 border rounded-xl outline-none transition-all font-bold text-xs bg-slate-50 border-slate-200 text-slate-900 focus:ring-1 focus:ring-slate-900"
+                    className="flex-grow px-4 py-2.5 sm:py-3 border rounded-xl outline-none transition-all font-bold text-xs bg-slate-50 border-slate-200 text-slate-900 focus:ring-1 focus:ring-slate-900"
                   />
                   <button 
                     onClick={handleAddAccess}
                     disabled={isSavingAccess}
-                    className="px-5 py-3 bg-brand-red hover:bg-red-650 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95"
+                    className="px-5 py-2.5 sm:py-3 bg-brand-red hover:bg-red-650 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5"
                   >
                     Adicionar
                   </button>
@@ -757,24 +764,24 @@ export function Admin() {
               </div>
 
               {/* Scrollable list of active users */}
-              <div>
+              <div className="flex flex-col">
                 <label className="block text-[9px] font-black uppercase tracking-widest mb-2 text-slate-400">Usuários com Permissão ({allowedUsers.length})</label>
-                <div className="max-h-[200px] overflow-y-auto rounded-2xl border bg-slate-50 border-slate-200">
+                <div className="max-h-[180px] sm:max-h-[220px] overflow-y-auto rounded-xl sm:rounded-2xl border bg-slate-50 border-slate-200">
                   {allowedUsers.length === 0 ? (
                     <p className="text-[10px] uppercase font-bold text-center py-8 text-slate-400 tracking-wider">Nenhum e-mail cadastrado</p>
                   ) : (
                     <div className="divide-y divide-slate-100">
                       {allowedUsers.map(u => (
-                        <div key={u.id} className="p-3.5 flex justify-between items-center hover:bg-slate-100 transition-colors">
-                          <div className="flex items-center gap-2.5 max-w-[80%]">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
-                            <span className="font-extrabold text-xs tracking-tight select-all truncate">{u.email}</span>
+                        <div key={u.id} className="p-3 sm:p-3.5 flex justify-between items-center hover:bg-slate-100 transition-colors">
+                          <div className="flex items-center gap-2 max-w-[80%] min-w-0">
+                            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                            <span className="font-extrabold text-[11px] sm:text-xs tracking-tight select-all truncate">{u.email}</span>
                           </div>
                           {(getCurrentSharePointUserEmail() || 'arlenloran@gmail.com').toLowerCase().trim() !== u.email.toLowerCase().trim() && (
                             <button 
                               onClick={() => handleRemoveAccess(u.id, u.email)}
                               disabled={isSavingAccess}
-                              className="p-1.5 text-slate-400 hover:text-brand-red rounded-lg hover:bg-red-50/10 transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-brand-red rounded-lg hover:bg-red-50/10 transition-colors flex-shrink-0"
                               title="Remover Permissão"
                             >
                               <X className="w-4 h-4" />
