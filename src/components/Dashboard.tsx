@@ -1125,11 +1125,6 @@ export function Dashboard() {
             <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 24px; margin-bottom: 6px; color: #1e293b; font-family: 'Segoe UI', Arial;">Resumo dos Dados</h3>
             ${detailsTable}
 
-            <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 24px; margin-bottom: 12px; color: #1e293b; font-family: 'Segoe UI', Arial;">Captura Visual do Dashboard</h3>
-            <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background-color: #f8fafc; padding: 10px; text-align: center;">
-              <img src="cid:print-dashboard.png" alt="Print do Dashboard" style="max-width: 100%; height: auto; border-radius: 4px;" />
-            </div>
-
             <p style="font-size: 10px; color: #94a3b8; margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 15px; font-weight: bold; font-family: 'Segoe UI', Arial;">
               ESTA É UMA NOTIFICAÇÃO AUTOMÁTICA DISPARADA PARA O MS TEAMS (CHAT ID: ${teamsChatId}). POR FAVOR, NÃO RESPONDA DIRETAMENTE.
             </p>
