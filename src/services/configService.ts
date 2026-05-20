@@ -24,125 +24,172 @@ export async function ensureSharePointConfig() {
   
   try {
     console.log("Checking SharePoint Config...");
-    // 1. Ensure Divisoes List
+    
+    // 1. Ensure Divisoes List exists
     if (!(await spListExists(LIST_DIVISOES))) {
-      console.log("Creating list Divisões...");
+      console.log(`Creating list ${LIST_DIVISOES}...`);
       await spCreateList(LIST_DIVISOES);
-      await spListEnsureNumberField(LIST_DIVISOES, "OrderIndex");
-      
-      // Seed initial divisions
+    }
+    // Always ensure its columns
+    await spListEnsureNumberField(LIST_DIVISOES, "OrderIndex");
+
+    // 2. Ensure Cards List exists
+    if (!(await spListExists(LIST_CARDS))) {
+      console.log(`Creating list ${LIST_CARDS}...`);
+      await spCreateList(LIST_CARDS);
+    }
+    // Always ensure its columns
+    await spListEnsureNumberField(LIST_CARDS, "DivisionId");
+    await spListEnsureNumberField(LIST_CARDS, "OrderIndex");
+    await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
+    await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
+    await spListEnsureTextField(LIST_CARDS, "HistoryData");
+    await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
+    await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
+    await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
+
+    // 3. Ensure Rules List exists
+    if (!(await spListExists(LIST_RULES))) {
+      console.log(`Creating list ${LIST_RULES}...`);
+      await spCreateList(LIST_RULES);
+    }
+    // Always ensure its columns
+    await spListEnsureNumberField(LIST_RULES, "CardId");
+
+    // 4. Ensure Users List exists
+    if (!(await spListExists(LIST_USERS))) {
+      console.log(`Creating list ${LIST_USERS}...`);
+      await spCreateList(LIST_USERS);
+    }
+    // Always ensure its columns
+    await spListEnsureTextField(LIST_USERS, "Email");
+
+    // Now check if each list is empty and seed data appropriately
+    
+    // A. Seed Divisoes if empty
+    const divItems = await spListGetItems(LIST_DIVISOES, { top: 1 });
+    let divIdsMap: Record<string, number> = {};
+    
+    if (divItems.status && divItems.data.length === 0) {
+      console.log("Seeding initial divisions...");
       const div1 = await spListAddItem(LIST_DIVISOES, { Title: "Separação de saldo", OrderIndex: 1 });
       const div2 = await spListAddItem(LIST_DIVISOES, { Title: "Validação sistêmica", OrderIndex: 2 });
       const div3 = await spListAddItem(LIST_DIVISOES, { Title: "Qualidade operacional", OrderIndex: 3 });
-
-      // 2. Ensure Cards List
-      if (!(await spListExists(LIST_CARDS))) {
-        console.log("Creating list Cards...");
-        await spCreateList(LIST_CARDS);
-        await spListEnsureNumberField(LIST_CARDS, "DivisionId");
-        await spListEnsureNumberField(LIST_CARDS, "OrderIndex");
-        await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
-        await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
-        await spListEnsureTextField(LIST_CARDS, "HistoryData");
-        await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
-        await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
-        await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
-
-        // Seed initial cards mapping to the seeded divisions
-        if (div1.status && div2.status && div3.status) {
-          await spListAddItem(LIST_CARDS, {
-            Title: "Separação de saldo",
-            DivisionId: div1.data.id,
-            SqlQuery: SQL_QUERY_SEPARACAO_SALDO,
-            Objective: "Consulta dinâmica de separação de saldo.",
-            RefreshInterval: 5,
-            OrderIndex: 1
-          });
-          await spListAddItem(LIST_CARDS, {
-            Title: "Validação sistemica",
-            DivisionId: div2.data.id,
-            SqlQuery: SQL_QUERY_VALIDACAO_SISTEMICA,
-            Objective: "Consulta dinâmica de validação sistêmica.",
-            RefreshInterval: 5,
-            OrderIndex: 2
-          });
-          await spListAddItem(LIST_CARDS, {
-            Title: "Estoque da validação sistemica",
-            DivisionId: div3.data.id,
-            SqlQuery: SQL_QUERY_ESTOQUE,
-            Objective: "Consulta dinâmica de estoque via validação sistêmica.",
-            RefreshInterval: 10,
-            OrderIndex: 3
-          });
-        }
+      
+      if (div1.status && div2.status && div3.status) {
+        divIdsMap["Separação de saldo"] = div1.data.id;
+        divIdsMap["Validação sistêmica"] = div2.data.id;
+        divIdsMap["Qualidade operacional"] = div3.data.id;
       }
-
-      // 3. Ensure Rules List
-      if (!(await spListExists(LIST_RULES))) {
-        console.log("Creating list Regras...");
-        await spCreateList(LIST_RULES);
-        await spListEnsureNumberField(LIST_RULES, "CardId");
-        
-        // Seed initial rules for 1, 2, 3
-        const seedRules = [
-          { CardId: 1, Title: "Estoque físico vs sistêmico deve ser zero." },
-          { CardId: 1, Title: "Transações pendentes há mais de 24h são críticas." },
-          { CardId: 2, Title: "Validar se todos os SKUs possuem peso cadastrado." },
-          { CardId: 2, Title: "Divergência superior a 5% exige recontagem." },
-          { CardId: 3, Title: "Saldo bloqueado deve ter motivo preenchido." },
-          { CardId: 3, Title: "Comparar reserva vs disponível no WMS." }
-        ];
-
-        for (const rule of seedRules) {
-          await spListAddItem(LIST_RULES, rule);
-        }
-      }
-    } else {
-      // Just ensure fields if list already existed
-      await spListEnsureNumberField(LIST_DIVISOES, "OrderIndex");
-      if (!(await spListExists(LIST_CARDS))) {
-        await spCreateList(LIST_CARDS);
-        await spListEnsureNumberField(LIST_CARDS, "DivisionId");
-        await spListEnsureNumberField(LIST_CARDS, "OrderIndex");
-        await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
-        await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
-        await spListEnsureTextField(LIST_CARDS, "HistoryData");
-        await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
-        await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
-        await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
-      } else {
-        // Ensure new fields on existing list
-        await spListEnsureNumberField(LIST_CARDS, "RefreshInterval");
-        await spListEnsureTextField(LIST_CARDS, "LastUpdateDate");
-        await spListEnsureTextField(LIST_CARDS, "HistoryData");
-        await spListEnsureMultiLineTextField(LIST_CARDS, "CachedData");
-        await spListEnsureMultiLineTextField(LIST_CARDS, "SqlQuery");
-        await spListEnsureMultiLineTextField(LIST_CARDS, "Objective");
-      }
-
-      // Ensure Rules list exists and fields are correct
-      if (!(await spListExists(LIST_RULES))) {
-        await spCreateList(LIST_RULES);
-        await spListEnsureNumberField(LIST_RULES, "CardId");
+    } else if (divItems.status && divItems.data.length > 0) {
+      const allDivs = await spListGetItems(LIST_DIVISOES);
+      if (allDivs.status) {
+        allDivs.data.forEach((d: any) => {
+          divIdsMap[d.Title] = d.Id;
+        });
       }
     }
 
-    // Ensure App_Dash_Users list exists and fields are correct
-    if (!(await spListExists(LIST_USERS))) {
-      console.log("Creating list Users (App_Dash_Users)...");
-      await spCreateList(LIST_USERS);
-      await spListEnsureTextField(LIST_USERS, "Email");
-      
+    // B. Seed Cards if empty
+    const cardItems = await spListGetItems(LIST_CARDS, { top: 1 });
+    let cardIdsMap: Record<string, number> = {};
+    
+    if (cardItems.status && cardItems.data.length === 0) {
+      console.log("Seeding initial cards...");
+      if (Object.keys(divIdsMap).length === 0) {
+        const divs = await spListGetItems(LIST_DIVISOES);
+        if (divs.status) {
+          divs.data.forEach((d: any) => {
+            divIdsMap[d.Title] = d.Id;
+          });
+        }
+      }
+
+      const div1Id = divIdsMap["Separação de saldo"] || Object.values(divIdsMap)[0];
+      const div2Id = divIdsMap["Validação sistêmica"] || Object.values(divIdsMap)[1] || div1Id;
+      const div3Id = divIdsMap["Qualidade operacional"] || Object.values(divIdsMap)[2] || div2Id;
+
+      if (div1Id) {
+        const c1 = await spListAddItem(LIST_CARDS, {
+          Title: "Separação de saldo",
+          DivisionId: div1Id,
+          SqlQuery: SQL_QUERY_SEPARACAO_SALDO,
+          Objective: "Consulta dinâmica de separação de saldo.",
+          RefreshInterval: 5,
+          OrderIndex: 1
+        });
+        if (c1.status) cardIdsMap["Separação de saldo"] = c1.data.id;
+      }
+      if (div2Id) {
+        const c2 = await spListAddItem(LIST_CARDS, {
+          Title: "Validação sistemica",
+          DivisionId: div2Id,
+          SqlQuery: SQL_QUERY_VALIDACAO_SISTEMICA,
+          Objective: "Consulta dinâmica de validação sistêmica.",
+          RefreshInterval: 5,
+          OrderIndex: 2
+        });
+        if (c2.status) cardIdsMap["Validação sistemica"] = c2.data.id;
+      }
+      if (div3Id) {
+        const c3 = await spListAddItem(LIST_CARDS, {
+          Title: "Estoque da validação sistemica",
+          DivisionId: div3Id,
+          SqlQuery: SQL_QUERY_ESTOQUE,
+          Objective: "Consulta dinâmica de estoque via validação sistêmica.",
+          RefreshInterval: 10,
+          OrderIndex: 3
+        });
+        if (c3.status) cardIdsMap["Estoque da validação sistemica"] = c3.data.id;
+      }
+    } else if (cardItems.status && cardItems.data.length > 0) {
+      const allCards = await spListGetItems(LIST_CARDS);
+      if (allCards.status) {
+        allCards.data.forEach((c: any) => {
+          cardIdsMap[c.Title] = c.Id;
+        });
+      }
+    }
+
+    // C. Seed Rules if empty
+    const ruleItems = await spListGetItems(LIST_RULES, { top: 1 });
+    if (ruleItems.status && ruleItems.data.length === 0) {
+      console.log("Seeding initial rules...");
+      const c1Id = cardIdsMap["Separação de saldo"] || Object.values(cardIdsMap)[0];
+      const c2Id = cardIdsMap["Validação sistemica"] || Object.values(cardIdsMap)[1] || c1Id;
+      const c3Id = cardIdsMap["Estoque da validação sistemica"] || Object.values(cardIdsMap)[2] || c2Id;
+
+      const seedRules: { CardId: any; Title: string }[] = [];
+      if (c1Id) {
+        seedRules.push({ CardId: c1Id, Title: "Estoque físico vs sistêmico deve ser zero." });
+        seedRules.push({ CardId: c1Id, Title: "Transações pendentes há mais de 24h são críticas." });
+      }
+      if (c2Id) {
+        seedRules.push({ CardId: c2Id, Title: "Validar se todos os SKUs possuem peso cadastrado." });
+        seedRules.push({ CardId: c2Id, Title: "Divergência superior a 5% exige recontagem." });
+      }
+      if (c3Id) {
+        seedRules.push({ CardId: c3Id, Title: "Saldo bloqueado deve ter motivo preenchido." });
+        seedRules.push({ CardId: c3Id, Title: "Comparar reserva vs disponível no WMS." });
+      }
+
+      for (const rule of seedRules) {
+        await spListAddItem(LIST_RULES, rule);
+      }
+    }
+
+    // D. Seed Users if empty
+    const userItems = await spListGetItems(LIST_USERS, { top: 1 });
+    if (userItems.status && userItems.data.length === 0) {
+      console.log("Seeding initial users...");
       const currentEmail = getCurrentSharePointUserEmail();
       if (currentEmail) {
         await spListAddItem(LIST_USERS, { Title: currentEmail, Email: currentEmail });
       }
       await spListAddItem(LIST_USERS, { Title: "arlenloran@gmail.com", Email: "arlenloran@gmail.com" });
-    } else {
-      await spListEnsureTextField(LIST_USERS, "Email");
     }
 
-    console.log("Config structure verified.");
+    console.log("Config structure and seed data verified successfully.");
   } catch (err) {
     console.error("Critical error ensuring SharePoint structure:", err);
   }

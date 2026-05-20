@@ -26,6 +26,70 @@ import {
 } from '../services/configService';
 import { getCurrentSharePointUserEmail, hasSpContext } from '../services/spService';
 
+function playAlertBeep(type: 'warning' | 'critical' | 'success' = 'warning') {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const audioCtx = new AudioContextClass();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    if (type === 'critical') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.35);
+    } else if (type === 'success') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.15);
+      
+      setTimeout(() => {
+        try {
+          const osc2 = audioCtx.createOscillator();
+          const gain2 = audioCtx.createGain();
+          osc2.connect(gain2);
+          gain2.connect(audioCtx.destination);
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
+          gain2.gain.setValueAtTime(0.08, audioCtx.currentTime);
+          osc2.start();
+          osc2.stop(audioCtx.currentTime + 0.2);
+        } catch {}
+      }, 150);
+    } else {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, audioCtx.currentTime); // A4
+      gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.2);
+    }
+  } catch (e) {
+    console.warn("Audio Context beep error:", e);
+  }
+}
+
+function speakAlertText(text: string) {
+  try {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'pt-BR';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  } catch (e) {
+    console.warn("Speech Synthesis warning:", e);
+  }
+}
+
 interface MetricCardProps {
   metric: Metric;
   onClick?: (metric: Metric) => void;
@@ -280,13 +344,20 @@ function SectionContainer({ section, onCardClick, onCardRefresh, isWarRoom }: { 
   );
 }
 
-function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClose: () => void, onRefresh?: (m: Metric) => void }) {
+function DivergenceModal({ metric, onClose, onRefresh, enableAI = true }: { metric: Metric, onClose: () => void, onRefresh?: (m: Metric) => void, enableAI?: boolean }) {
   const [activeTab, setActiveTab] = useState<'table' | 'objective' | 'rules' | 'trend' | 'ai'>('table');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const itemsPerPage = 10;
+
+  // If AI is disabled but we somehow started with activeTab === 'ai', reset to table
+  useEffect(() => {
+    if (!enableAI && activeTab === 'ai') {
+      setActiveTab('table');
+    }
+  }, [enableAI, activeTab]);
   
   const runAiAnalysis = async () => {
     if (isAnalyzing) return;
@@ -374,7 +445,9 @@ function DivergenceModal({ metric, onClose, onRefresh }: { metric: Metric, onClo
               <button onClick={() => setActiveTab('objective')} className={`p-2 rounded-md transition-all ${activeTab === 'objective' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}><BookOpen className="w-5 h-5" /></button>
               <button onClick={() => setActiveTab('rules')} className={`p-2 rounded-md transition-all ${activeTab === 'rules' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}><ShieldCheck className="w-5 h-5" /></button>
               <button onClick={() => setActiveTab('trend')} className={`p-2 rounded-md transition-all ${activeTab === 'trend' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}><TrendingUp className="w-5 h-5" /></button>
-              <button onClick={runAiAnalysis} className={`p-2 rounded-md transition-all ${activeTab === 'ai' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-500 hover:text-indigo-700'}`} disabled={isAnalyzing}><Sparkles className={`w-5 h-5 ${isAnalyzing ? 'animate-pulse' : ''}`} /></button>
+              {enableAI && (
+                <button onClick={runAiAnalysis} className={`p-2 rounded-md transition-all ${activeTab === 'ai' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-500 hover:text-indigo-700'}`} disabled={isAnalyzing}><Sparkles className={`w-5 h-5 ${isAnalyzing ? 'animate-pulse' : ''}`} /></button>
+              )}
             </div>
             <button onClick={downloadExcel} className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all shadow-sm active:scale-95 disabled:opacity-50" disabled={!metric.details || metric.details.length === 0}><Download className="w-5 h-5" /></button>
             <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600"><X className="w-6 h-6" /></button>
@@ -536,9 +609,48 @@ export function Dashboard() {
   const [selectedMetric, setSelectedMetric] = useState<Metric | null>(null);
   const [isWarRoom, setIsWarRoom] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'layout' | 'log'>('layout');
+  const [settingsTab, setSettingsTab] = useState<'layout' | 'log' | 'prefs'>('layout');
   const [layoutConfig, setLayoutConfig] = useState<{title: string, width: number}[]>([]);
   const [eventLog, setEventLog] = useState<{ id: string, message: string, time: string, type: 'info' | 'critical' | 'success' }[]>([]);
+
+  // System preferences (AI, header visibility, KPI details and audio notifications)
+  const [preferences, setPreferences] = useState({
+    enableAI: true,
+    showHeader: true,
+    showKpiDivergences: true,
+    showKpiCritical: true,
+    showKpiAccuracy: true,
+    showKpiSla: true,
+    audioAlertMode: 'both' as 'none' | 'beep' | 'ts' | 'both',
+  });
+
+  useEffect(() => {
+    const saved = localStorage.getItem('dashboard_preferences');
+    if (saved) {
+      try {
+        setPreferences(prev => ({ ...prev, ...JSON.parse(saved) }));
+      } catch (e) {
+        console.error("Error loading dashboard preferences:", e);
+      }
+    }
+  }, []);
+
+  const savePreferences = (updated: typeof preferences) => {
+    setPreferences(updated);
+    localStorage.setItem('dashboard_preferences', JSON.stringify(updated));
+  };
+
+  const triggerAlarm = (message: string, alertType: 'warning' | 'critical' | 'success') => {
+    const mode = preferences.audioAlertMode;
+    if (mode === 'none') return;
+    
+    if (mode === 'beep' || mode === 'both') {
+      playAlertBeep(alertType);
+    }
+    if (mode === 'ts' || mode === 'both') {
+      speakAlertText(message);
+    }
+  };
 
   // Permissions & Access Management States
   const [hasAdminAccess, setHasAdminAccess] = useState(false);
@@ -697,6 +809,8 @@ export function Dashboard() {
       const nowIso = now.toISOString();
       const nowString = now.toLocaleString('pt-BR');
       const metricsToUpdate: any[] = [];
+      const newlyFoundErrors: string[] = [];
+      const resolvedErrors: string[] = [];
       
       setData(current => {
         return current.map(section => {
@@ -705,6 +819,15 @@ export function Dashboard() {
             if (resultMatch) {
               const res = results[fetchPromises.indexOf(resultMatch)];
               const rowCount = Array.isArray(res) ? res.length : 0;
+              const isNowError = rowCount > 0;
+              const wasError = metric.status === 'error';
+              
+              if (isNowError && !wasError) {
+                newlyFoundErrors.push(metric.title);
+              } else if (!isNowError && wasError) {
+                resolvedErrors.push(metric.title);
+              }
+
               const updatedHistory = [rowCount, ...(metric.history || [])].slice(0, 10);
               const updatedMetric = {
                 ...metric,
@@ -725,6 +848,13 @@ export function Dashboard() {
       });
       metricsToUpdate.forEach(m => saveMetricData(m.id, m.iso, m.result, m.history));
       setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: "Sincronização completada com sucesso.", time: new Date().toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
+      
+      // Trigger notifications if needed
+      if (newlyFoundErrors.length > 0) {
+        triggerAlarm(`Alerta! Nova divergência detectada na métrica: ${newlyFoundErrors.join(', ')}`, 'critical');
+      } else if (resolvedErrors.length > 0) {
+        triggerAlarm(`Excelente! Divergência resolvida na métrica: ${resolvedErrors.join(', ')}`, 'success');
+      }
     } catch (err) {
       console.error("Data fetch error:", err);
     }
@@ -746,6 +876,8 @@ export function Dashboard() {
       const nowIso = now.toISOString();
       const rowCount = Array.isArray(result) ? result.length : 0;
       let updatedHistory: number[] = [];
+      const wasError = metric.status === 'error';
+      const isNowError = rowCount > 0;
 
       setData(current => {
         return current.map(section => {
@@ -770,6 +902,13 @@ export function Dashboard() {
       });
       saveMetricData(metric.id, nowIso, result, updatedHistory);
       setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `Card "${metric.title}" atualizado automaticamente.`, time: now.toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
+      
+      // Trigger notifications if needed
+      if (isNowError && !wasError) {
+        triggerAlarm(`Alerta! Nova divergência detectada na métrica: ${metric.title}`, 'critical');
+      } else if (!isNowError && wasError) {
+        triggerAlarm(`Excelente! Divergência resolvida na métrica: ${metric.title}`, 'success');
+      }
     } catch (err) { console.error(`Auto-refresh error for metric ${metric.id}:`, err); }
   };
 
@@ -833,19 +972,93 @@ export function Dashboard() {
 
   return (
     <main className={`min-h-screen transition-colors duration-700 p-4 md:p-8 space-y-10 pb-32 ${isWarRoom ? 'bg-[#050510] text-white' : 'bg-slate-50 text-slate-900'}`}>
-      <header className={`flex flex-col sm:flex-row justify-between items-center mb-6 px-6 py-6 rounded-2xl transition-all duration-700 gap-6 mx-auto w-full ${isWarRoom ? 'bg-[#0f1125] border border-indigo-900/40 shadow-[0_0_40px_rgba(0,0,0,0.5)] max-w-[1700px]' : 'bg-white shadow-sm border border-slate-200 max-w-[1400px]'}`}>
-        <div className="flex items-center gap-4">
-          <div className={`p-3 rounded-2xl transition-colors duration-500 relative ${isWarRoom ? 'bg-indigo-950/30' : 'bg-slate-50'}`}><Activity className={`w-8 h-8 transition-colors duration-500 ${isWarRoom ? 'text-brand-red animate-pulse' : 'text-slate-900'}`} />{isWarRoom && <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute inset-0 bg-brand-red/20 rounded-2xl" />}</div>
-          <div><h1 className={`text-2xl font-black italic tracking-tighter uppercase leading-tight transition-colors duration-500 ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>Monitor <span className="text-brand-red font-black">Operacional</span></h1><div className="flex items-center gap-2 mt-1"><div className={`w-2 h-2 rounded-full animate-pulse ${isWarRoom ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-emerald-500'}`} /><p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Controle de divergências operacionais em tempo real</p></div></div>
-        </div>
-      </header>
+      {preferences.showHeader && (
+        <header className={`flex flex-col sm:flex-row justify-between items-center mb-6 px-6 py-6 rounded-2xl transition-all duration-700 gap-6 mx-auto w-full ${isWarRoom ? 'bg-[#0f1125] border border-indigo-900/40 shadow-[0_0_40px_rgba(0,0,0,0.5)] max-w-[1700px]' : 'bg-white shadow-sm border border-slate-200 max-w-[1400px]'}`}>
+          <div className="flex items-center gap-4">
+            <div className={`p-3 rounded-2xl transition-colors duration-500 relative ${isWarRoom ? 'bg-indigo-950/30' : 'bg-slate-50'}`}><Activity className={`w-8 h-8 transition-colors duration-500 ${isWarRoom ? 'text-brand-red animate-pulse' : 'text-slate-900'}`} />{isWarRoom && <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute inset-0 bg-brand-red/20 rounded-2xl" />}</div>
+            <div><h1 className={`text-2xl font-black italic tracking-tighter uppercase leading-tight transition-colors duration-500 ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>Monitor <span className="text-brand-red font-black">Operacional</span></h1><div className="flex items-center gap-2 mt-1"><div className={`w-2 h-2 rounded-full animate-pulse ${isWarRoom ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-emerald-500'}`} /><p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Controle de divergências operacionais em tempo real</p></div></div>
+          </div>
+        </header>
+      )}
 
-      <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 mx-auto w-full transition-all duration-700 ${isWarRoom ? 'max-w-[1700px]' : 'max-w-[1400px]'}`}>
-        <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Total Divergências</p><h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>{totalDivergences}</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-indigo-500/10 text-indigo-400' : 'bg-slate-50 text-slate-400'}`}><Activity className="w-5 h-5" /></div></div><div className={`mt-4 h-1.5 w-full rounded-full overflow-hidden ${isWarRoom ? 'bg-slate-800' : 'bg-slate-100'}`}><motion.div initial={{ width: 0 }} animate={{ width: '65%' }} className="h-full bg-brand-red" /></div></div>
-        <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Métricas Críticas</p><h4 className="text-3xl font-black italic tracking-tighter text-brand-red">{criticalMetrics}</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-400'}`}><XCircle className="w-5 h-5" /></div></div><p className="mt-4 text-[10px] font-bold text-slate-500 italic">Requer atenção imediata</p></div>
-        <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Acertos Hoje</p><h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-emerald-500' : 'text-emerald-600'}`}>{accuracyToday.toFixed(1)}%</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}><CheckCircle2 className="w-5 h-5" /></div></div><div className="mt-4 flex items-center gap-1">{trendValue >= 0 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-red-500" />}<span className={`text-[10px] font-black ${trendValue >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{trendValue >= 0 ? '+' : ''}{trendValue.toFixed(1)}% vs anterior</span></div></div>
-        <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-brand-red border-red-800 shadow-[0_0_30px_rgba(204,0,0,0.2)]' : 'bg-brand-yellow border-brand-yellow shadow-sm'}`}><div className="flex justify-between items-start"><div><p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>SLA Operacional</p><h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>{slaScore.toFixed(1)}%</h4></div><div className={`p-2 rounded-lg ${isWarRoom ? 'bg-white/10 text-white' : 'bg-white/20 text-slate-900'}`}><RefreshCcw className="w-5 h-5" /></div></div><p className={`mt-4 text-[10px] font-black uppercase ${isWarRoom ? 'text-red-200' : 'text-slate-700'}`}>Status: {slaScore > 95 ? 'Excelente' : slaScore > 80 ? 'Bom' : 'Crítico'}</p></div>
-      </div>
+      {/* KPI Cards Block */}
+      {(preferences.showKpiDivergences || preferences.showKpiCritical || preferences.showKpiAccuracy || preferences.showKpiSla) && (
+        <div className={`grid grid-cols-2 md:grid-cols-${
+          [preferences.showKpiDivergences, preferences.showKpiCritical, preferences.showKpiAccuracy, preferences.showKpiSla].filter(Boolean).length
+        } gap-4 mx-auto w-full transition-all duration-700 ${isWarRoom ? 'max-w-[1700px]' : 'max-w-[1400px]'}`}>
+          
+          {preferences.showKpiDivergences && (
+            <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Total Divergências</p>
+                  <h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>{totalDivergences}</h4>
+                </div>
+                <div className={`p-2 rounded-lg ${isWarRoom ? 'bg-indigo-500/10 text-indigo-400' : 'bg-slate-50 text-slate-400'}`}>
+                  <Activity className="w-5 h-5" />
+                </div>
+              </div>
+              <div className={`mt-4 h-1.5 w-full rounded-full overflow-hidden ${isWarRoom ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (totalDivergences / 50) * 100)}%` }} className="h-full bg-brand-red" />
+              </div>
+            </div>
+          )}
+
+          {preferences.showKpiCritical && (
+            <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Métricas Críticas</p>
+                  <h4 className="text-3xl font-black italic tracking-tighter text-brand-red">{criticalMetrics}</h4>
+                </div>
+                <div className={`p-2 rounded-lg ${isWarRoom ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-400'}`}>
+                  <XCircle className="w-5 h-5" />
+                </div>
+              </div>
+              <p className="mt-4 text-[10px] font-bold text-slate-500 italic">Requer atenção imediata</p>
+            </div>
+          )}
+
+          {preferences.showKpiAccuracy && (
+            <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${isWarRoom ? 'bg-[#0f1125] border-indigo-900/30' : 'bg-white border-slate-100 shadow-sm'}`}>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Acertos Hoje</p>
+                  <h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-emerald-500' : 'text-emerald-600'}`}>{accuracyToday.toFixed(1)}%</h4>
+                </div>
+                <div className={`p-2 rounded-lg ${isWarRoom ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-1">
+                {trendValue >= 0 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-red-500" />}
+                <span className={`text-[10px] font-black ${trendValue >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                  {trendValue >= 0 ? '+' : ''}{trendValue.toFixed(1)}% vs anterior
+                </span>
+              </div>
+            </div>
+          )}
+
+          {preferences.showKpiSla && (
+            <div className={`p-5 rounded-2xl border transition-all duration-500 overflow-hidden relative group ${
+              isWarRoom ? 'bg-brand-red border-red-800 shadow-[0_0_30px_rgba(204,0,0,0.2)]' : 'bg-brand-yellow border-brand-yellow shadow-sm'
+            }`}>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>SLA Operacional</p>
+                  <h4 className={`text-3xl font-black italic tracking-tighter ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>{slaScore.toFixed(1)}%</h4>
+                </div>
+                <div className={`p-2 rounded-lg ${isWarRoom ? 'bg-white/10 text-white' : 'bg-white/20 text-slate-900'}`}>
+                  <RefreshCcw className="w-5 h-5" />
+                </div>
+              </div>
+              <p className={`mt-4 text-[10px] font-black uppercase ${isWarRoom ? 'text-red-200' : 'text-slate-700'}`}>
+                Status: {slaScore > 95 ? 'Excelente' : slaScore > 80 ? 'Bom' : 'Crítico'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className={`flex flex-wrap gap-x-8 gap-y-12 px-2 transition-all duration-700 mx-auto justify-center ${isWarRoom ? 'max-w-[1700px]' : 'max-w-[1400px]'}`}>
         <AnimatePresence mode="popLayout">
@@ -857,7 +1070,7 @@ export function Dashboard() {
         </AnimatePresence>
       </div>
 
-      <AnimatePresence>{selectedMetric && <DivergenceModal metric={selectedMetric} onClose={() => setSelectedMetric(null)} onRefresh={refreshSingleMetric} />}</AnimatePresence>
+      <AnimatePresence>{selectedMetric && <DivergenceModal metric={selectedMetric} onClose={() => setSelectedMetric(null)} onRefresh={refreshSingleMetric} enableAI={preferences.enableAI} />}</AnimatePresence>
       <AnimatePresence>{isSettingsOpen && (
           <><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSettingsOpen(false)} className="fixed inset-0 bg-slate-950/20 backdrop-blur-[2px] z-[55]" />
             <motion.div initial={{ opacity: 0, x: 300 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 300 }} className={`fixed right-0 top-0 bottom-0 w-80 z-[60] shadow-2xl p-6 border-l transition-colors duration-500 flex flex-col ${isWarRoom ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
@@ -865,6 +1078,7 @@ export function Dashboard() {
               <div className={`flex p-1 rounded-xl mb-8 transition-colors ${isWarRoom ? 'bg-slate-950' : 'bg-slate-100'}`}>
                 <button onClick={() => setSettingsTab('layout')} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${settingsTab === 'layout' ? 'bg-brand-red text-white shadow-md' : 'text-slate-500 hover:bg-white/10'}`}>Layout</button>
                 <button onClick={() => setSettingsTab('log')} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${settingsTab === 'log' ? 'bg-brand-red text-white shadow-md' : 'text-slate-500 hover:bg-white/10'}`}>Atividade</button>
+                <button onClick={() => setSettingsTab('prefs')} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${settingsTab === 'prefs' ? 'bg-brand-red text-white shadow-md' : 'text-slate-500 hover:bg-white/10'}`}>Definições</button>
               </div>
               <div className="flex-grow overflow-y-auto pr-2 scrollbar-hide">
                 {settingsTab === 'layout' ? (
@@ -889,7 +1103,7 @@ export function Dashboard() {
                       </div>
                     ))}
                   </div>
-                ) : (
+                ) : settingsTab === 'log' ? (
                   <div className="space-y-3 animate-in fade-in slide-in-from-left-4 duration-300">
                     {eventLog.length > 0 ? (
                       eventLog.map((event) => (
@@ -907,9 +1121,155 @@ export function Dashboard() {
                       </div>
                     )}
                   </div>
+                ) : (
+                  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                    {/* AI Config */}
+                    <div className={`p-4 rounded-xl border ${isWarRoom ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'} flex flex-col gap-3`}>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-tight">IA Analítica Gemini</p>
+                          <p className="text-[9px] text-slate-500">Geração de insights e sugestões</p>
+                        </div>
+                        <button
+                          onClick={() => savePreferences({ ...preferences, enableAI: !preferences.enableAI })}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 ${
+                            preferences.enableAI ? 'bg-brand-red' : isWarRoom ? 'bg-slate-800' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
+                            preferences.enableAI ? 'translate-x-[22px]' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+
+                      <div className="border-t border-slate-200/20 my-1" />
+
+                      {/* Header Config */}
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-tight">Exibir Cabeçalho</p>
+                          <p className="text-[9px] text-slate-500">Mostrar cabeçalho principal</p>
+                        </div>
+                        <button
+                          onClick={() => savePreferences({ ...preferences, showHeader: !preferences.showHeader })}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 ${
+                            preferences.showHeader ? 'bg-brand-red' : isWarRoom ? 'bg-slate-800' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
+                            preferences.showHeader ? 'translate-x-[22px]' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* KPI Cards Config */}
+                    <div className={`p-4 rounded-xl border ${isWarRoom ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'} space-y-4`}>
+                      <h3 className="text-[9px] font-black uppercase tracking-wider text-slate-400">Visibilidade dos Cards KPI</h3>
+                      
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold">Total Divergências</span>
+                        <button
+                          onClick={() => savePreferences({ ...preferences, showKpiDivergences: !preferences.showKpiDivergences })}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 ${
+                            preferences.showKpiDivergences ? 'bg-brand-red' : isWarRoom ? 'bg-slate-800' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
+                            preferences.showKpiDivergences ? 'translate-x-[22px]' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold">Métricas Críticas</span>
+                        <button
+                          onClick={() => savePreferences({ ...preferences, showKpiCritical: !preferences.showKpiCritical })}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 ${
+                            preferences.showKpiCritical ? 'bg-brand-red' : isWarRoom ? 'bg-slate-800' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
+                            preferences.showKpiCritical ? 'translate-x-[22px]' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold">Acertos Hoje</span>
+                        <button
+                          onClick={() => savePreferences({ ...preferences, showKpiAccuracy: !preferences.showKpiAccuracy })}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 ${
+                            preferences.showKpiAccuracy ? 'bg-brand-red' : isWarRoom ? 'bg-slate-800' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
+                            preferences.showKpiAccuracy ? 'translate-x-[22px]' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold">SLA Operacional</span>
+                        <button
+                          onClick={() => savePreferences({ ...preferences, showKpiSla: !preferences.showKpiSla })}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 ${
+                            preferences.showKpiSla ? 'bg-brand-red' : isWarRoom ? 'bg-slate-800' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
+                            preferences.showKpiSla ? 'translate-x-[22px]' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Audio Config */}
+                    <div className={`p-4 rounded-xl border ${isWarRoom ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'} space-y-3`}>
+                      <div>
+                        <h3 className="text-[9px] font-black uppercase tracking-wider text-slate-400">Bips e Alertas de Voz</h3>
+                        <p className="text-[8px] text-slate-500">Notificação instantânea para novos desvios</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-1.5 pt-1.5">
+                        {[
+                          { key: 'none', label: 'Desativado' },
+                          { key: 'beep', label: 'Bipes' },
+                          { key: 'ts', label: 'Voz (Autofalante)' },
+                          { key: 'both', label: 'Bipe + Voz' },
+                        ].map(opt => (
+                          <button
+                            key={opt.key}
+                            onClick={() => {
+                              savePreferences({ ...preferences, audioAlertMode: opt.key as any });
+                              if (opt.key !== 'none') {
+                                playAlertBeep('success');
+                                speakAlertText("Som de teste!");
+                              }
+                            }}
+                            className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all border text-center ${
+                              preferences.audioAlertMode === opt.key
+                                ? 'bg-brand-red border-brand-red text-white shadow-sm'
+                                : isWarRoom
+                                ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className={`mt-auto pt-6 p-4 rounded-xl border italic text-[10px] font-medium leading-relaxed ${isWarRoom ? 'bg-slate-950/50 border-slate-800 text-slate-500' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>{settingsTab === 'layout' ? "Sincronização inteligente de grid baseada em larguras customizadas." : "Log operacional de mutações detectadas em tempo real via stream."}</div>
+              <div className={`mt-auto pt-6 p-4 rounded-xl border italic text-[10px] font-medium leading-relaxed ${isWarRoom ? 'bg-slate-950/50 border-slate-800 text-slate-500' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
+                {settingsTab === 'layout' 
+                  ? "Sincronização inteligente de grid baseada em larguras customizadas." 
+                  : settingsTab === 'log' 
+                  ? "Log operacional de mutações detectadas em tempo real via stream."
+                  : "Preferências de exibição, recursos de IA analítica e notificações sonoras."}
+              </div>
             </motion.div></>
         )}</AnimatePresence>
 
