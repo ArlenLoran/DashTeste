@@ -11,6 +11,7 @@ export default defineConfig(({mode}) => {
       'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY),
       'process.env.APP_URL': JSON.stringify(process.env.APP_URL || env.APP_URL),
       'process.env.POWER_AUTOMATE_URL': JSON.stringify(process.env.POWER_AUTOMATE_URL || env.POWER_AUTOMATE_URL),
+      'process.env.POWER_AUTOMATE_EMAIL_URL': JSON.stringify(process.env.POWER_AUTOMATE_EMAIL_URL || env.POWER_AUTOMATE_EMAIL_URL),
     },
     build: {
       rollupOptions: {

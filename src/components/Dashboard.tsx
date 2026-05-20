@@ -695,7 +695,7 @@ export function Dashboard() {
       // Build modern, stylish HTML body with a premium dark slate/crimson design
       let tableRowsHtml = '';
       if (details && details.length > 0) {
-        const columns = Object.keys(details[0]).slice(0, 6);
+        const columns = Object.keys(details[0]).slice(0, 5);
         
         const headerHtml = columns.map(c => `
           <th style="padding: 12px 10px; border-bottom: 2px solid #ef4444; text-align: left; font-size: 11px; text-transform: uppercase; color: #f8fafc; font-weight: 900; letter-spacing: 0.5px;">${c}</th>
@@ -705,79 +705,138 @@ export function Dashboard() {
           const cells = columns.map(c => {
             const rawVal = row[c];
             const val = rawVal === null || rawVal === undefined ? '' : typeof rawVal === 'object' ? JSON.stringify(rawVal) : String(rawVal);
-            return `<td style="padding: 10px; border-bottom: 1px solid #1e293b; font-size: 11px; color: #cbd5e1; font-family: monospace;">${val}</td>`;
+            return `<td style="padding: 10px; border-bottom: 1px solid #1f2937; font-size: 11px; color: #cbd5e1; font-family: monospace;">${val}</td>`;
           }).join('');
-          const bg = idx % 2 === 0 ? '#0f172a' : '#1e293b';
+          const bg = idx % 2 === 0 ? '#111827' : '#1f2937';
           return `<tr style="background-color: ${bg};">${cells}</tr>`;
         }).join('');
 
         const truncateWarning = details.length > 15 
-          ? `<tr><td colspan="${columns.length}" style="text-align: center; padding: 12px; color: #f43f5e; font-size: 11px; font-weight: 900; background-color: #881337; text-transform: uppercase; letter-spacing: 0.5px;">Exibindo os 15 primeiros registros na tabela. A base de dados completa (total de ${details.length} desvios) foi anexada em formato Excel neste e-mail.</td></tr>`
-          : '<tr><td colspan="' + columns.length + '" style="text-align: center; padding: 12px; color: #10b981; font-size: 10px; font-weight: 900; background-color: rgba(16, 185, 129, 0.1); text-transform: uppercase; letter-spacing: 0.5px;">A base completa de divergências também foi anexada em formato .xlsx neste e-mail.</td></tr>';
+          ? `<tr><td colspan="${columns.length}" style="text-align: center; padding: 12px; color: #fca5a5; font-size: 11px; font-weight: 700; background-color: #7f1d1d; letter-spacing: 0.5px;">Exibindo os 15 primeiros registros na tabela. A planilha completa (total de ${details.length} desvios) foi anexada em formato Excel (.xlsx).</td></tr>`
+          : `<tr><td colspan="${columns.length}" style="text-align: center; padding: 10px; color: #10b981; font-size: 10px; font-weight: bold; background-color: rgba(16, 185, 129, 0.05); text-transform: uppercase; letter-spacing: 0.5px;">Todos os ${details.length} registros foram listados acima e a planilha completa foi anexa.</td></tr>`;
 
         tableRowsHtml = `
-          <div style="margin-top: 20px; border-radius: 12px; overflow: hidden; border: 1px solid #ef4444; box-shadow: 0 4px 20px rgba(220, 38, 38, 0.15);">
+          <div style="margin: 15px 0; border-radius: 12px; overflow: hidden; border: 1px solid #374151; box-shadow: 0 4px 15px rgba(0,0,0,0.25);">
             <table style="width: 100%; border-collapse: collapse;">
               <thead>
-                <tr style="background-color: #1e1b4b;">${headerHtml}</tr>
+                <tr style="background-color: #1f2937;">${headerHtml}</tr>
               </thead>
               <tbody>${rowsHtml}${truncateWarning}</tbody>
             </table>
           </div>
         `;
       } else {
-        tableRowsHtml = `<p style="color: #94a3b8; font-style: italic; background-color: #0f172a; padding: 16px; border-radius: 8px; border: 1px dashed #334155;">Nenhum detalhe adicional disponível para esta divergência.</p>`;
+        tableRowsHtml = `<p style="color: #9cb3af; font-style: italic; background-color: #111827; padding: 16px; border-radius: 8px; border: 1px dashed #374151;">Nenhum detalhe adicional disponível para esta divergência.</p>`;
       }
 
       const bodyHtml = `
-        <div style="font-family: Arial, sans-serif; background-color: #020617; color: #f8fafc; padding: 40px 30px; border-radius: 16px; max-width: 650px; margin: 20px auto; border: 1px solid #ef4444;">
-          <table style="width: 100%;">
-            <tr>
-              <td>
-                <span style="background-color: #fca5a5; color: #991b1b; font-size: 9px; font-weight: 950; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1.5px; display: inline-block;">SISTEMA DE MONITORAMENTO</span>
-                <h1 style="color: #ffffff; font-size: 22px; font-weight: 900; margin: 12px 0 4px 0; font-style: italic; text-transform: uppercase; tracking: -0.5px;">MONITOR <span style="color: #ef4444;">OPERACIONAL</span></h1>
-                <p style="color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 20px 0;">Controle de desvios operacionais em tempo real</p>
-              </td>
-              <td style="text-align: right; vertical-align: top;">
-                <span style="color: #ef4444; font-size: 18px; font-weight: bold;">🔴 ALERTA DE DESVIO</span>
-              </td>
-            </tr>
-          </table>
-
-          <div style="border-top: 1px solid #1e293b; padding-top: 24px; margin-top: 10px;">
-            <p style="color: #e2e8f0; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
-              Olá, equipe operacional do painel.
-            </p>
-            <p style="color: #cbd5e1; font-size: 13px; line-height: 1.6; margin: 0 0 20px 0;">
-              Foi identificada uma <strong>nova divergência ativa</strong> no monitoramento do sistema. Verifique os detalhes e analise a causa raiz com máxima prioridade.
-            </p>
-            
-            <div style="background: rgba(220, 38, 38, 0.1); border-left: 4px solid #ef4444; padding: 18px; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
-              <span style="color: #94a3b8; font-size: 9px; font-weight: bold; text-transform: uppercase; tracking: 1px; display: block; margin-bottom: 4px;">MÉTRICA AFETADA</span>
-              <span style="color: #ffffff; font-size: 18px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 0.25px;">${metricTitle}</span>
-              <span style="color: #ef4444; font-size: 12px; font-weight: 900; display: block; margin-top: 8px;">Total de desvios detectados: ${details.length}</span>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>[ALERTA] Divergência Operacional</title>
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #0b0f19;">
+          <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0b0f19; padding: 40px 20px; color: #f3f4f6;">
+            <!-- Inner container -->
+            <div style="max-width: 650px; margin: 0 auto; background-color: #111827; border-radius: 16px; border: 1px solid #374151; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.35);">
+              
+              <!-- Top Decorative Red Bar -->
+              <div style="background-color: #d00000; height: 6px;"></div>
+              
+              <div style="padding: 35px 30px;">
+                <!-- Header -->
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+                  <tr>
+                    <td>
+                      <span style="background-color: #fee2e2; color: #b91c1c; font-size: 9px; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1.5px; display: inline-block; font-family: monospace;">SISTEMA AUTOMÁTICO</span>
+                      <h1 style="color: #ffffff; font-size: 24px; font-weight: 800; margin: 8px 0 2px 0; font-family: 'Segoe UI', sans-serif; letter-spacing: -0.5px; text-transform: uppercase;">MONITOR <span style="color: #d00000;">OPERACIONAL</span></h1>
+                      <p style="color: #9ca3af; font-size: 11px; margin: 0; text-transform: uppercase; letter-spacing: 1px;">Gestão Integrada de Desvios & SLAs</p>
+                    </td>
+                    <td style="text-align: right; vertical-align: top;">
+                      <span style="display: inline-block; background-color: #7f1d1d; color: #fca5a5; font-size: 10px; font-weight: 700; padding: 6px 12px; border-radius: 8px; border: 1px solid #b91c1c;">
+                        🔴 ALERTA OPERACIONAL
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+                
+                <!-- Divider -->
+                <hr style="border: 0; border-top: 1px solid #1f2937; margin: 25px 0;" />
+                
+                <!-- Intro message -->
+                <p style="font-size: 15px; color: #e5e7eb; line-height: 1.6; margin: 0 0 15px 0;">
+                  Prezada equipe operacional,
+                </p>
+                
+                <p style="font-size: 14px; color: #9ca3af; line-height: 1.6; margin: 0 0 25px 0;">
+                  Foi identificada uma <strong>nova divergência operacional ativa</strong> no monitoramento de dados que requer verificação imediata. Consulte as especificações abaixo:
+                </p>
+                
+                <!-- Metric Highlights Card -->
+                <div style="background-color: #1f2937; border-left: 4px solid #d00000; border-radius: 4px 12px 12px 4px; padding: 20px; margin-bottom: 30px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.15);">
+                  <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                      <td style="padding-bottom: 10px;">
+                        <span style="color: #9ca3af; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px;">Métrica Monitorada</span>
+                        <span style="color: #ffffff; font-size: 18px; font-weight: 800; text-transform: uppercase; tracking: -0.25px;">${metricTitle}</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding-top: 12px; border-top: 1px solid #374151;">
+                        <span style="color: #9ca3af; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px;">Total de Registros Afetados</span>
+                        <span style="color: #fca5a5; font-size: 15px; font-weight: 700;">${details.length} desvios detectados</span>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+                
+                <!-- Table Header Title -->
+                <h3 style="color: #ffffff; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 12px 0;">Amostra de Divergências Encontradas (15 Primeiros)</h3>
+                
+                <!-- Table container -->
+                ${tableRowsHtml}
+                
+                <!-- Button Banner -->
+                <div style="margin-top: 40px; text-align: center; background: linear-gradient(135deg, #1f2937 0%, #111827 100%); padding: 30px; border-radius: 12px; border: 1px solid #374151;">
+                  <p style="color: #9ca3af; font-size: 12px; margin: 0 0 16px 0; line-height: 1.5;">
+                    A planilha completa no formato <strong>Excel (.xlsx)</strong> foi gerada em tempo real e anexada nesta notificação para análise integrada.
+                  </p>
+                  <a href="${window.location.origin}" style="display: inline-block; background-color: #d00000; color: #ffffff; font-size: 12px; font-weight: 800; padding: 14px 28px; text-decoration: none; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(208, 0, 0, 0.45); text-align: center; font-style: normal;">
+                    Acessar Painel Integrado
+                  </a>
+                </div>
+                
+              </div>
+              
+              <!-- Footer -->
+              <div style="background-color: #1f2937; padding: 25px 30px; text-align: center; border-top: 1px solid #374151;">
+                <p style="color: #9ca3af; font-size: 10px; margin: 0; line-height: 1.5; text-transform: uppercase; letter-spacing: 1px;">
+                  Monitor Operacional • DHL Supply Chain
+                </p>
+                <p style="color: #6b7280; font-size: 9px; margin: 8px 0 0 0; text-transform: uppercase; letter-spacing: 1px;">
+                  Este e-mail é gerado automaticamente pelo robô de monitoramento de SLAs. Não responda a esta mensagem.
+                </p>
+                <p style="color: #6b7280; font-size: 9px; margin: 4px 0 0 0;">
+                  Data e hora da detecção: ${new Date().toLocaleString('pt-BR')} (UTC)
+                </p>
+              </div>
             </div>
-
-            <h3 style="color: #ffffff; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px 0;">AMOSTRA DOS REGISTROS DA DIVERGÊNCIA</h3>
-            ${tableRowsHtml}
           </div>
-
-          <div style="margin-top: 35px; text-align: center; border-top: 1px dashed #1e293b; padding-top: 25px;">
-            <p style="color: #94a3b8; font-size: 11px; margin-bottom: 15px;">Use o anexo de planilha enviado nesta notificação para ver todos os detalhes.</p>
-            <a href="${window.location.origin}" style="display: inline-block; background-color: #ef4444; color: #ffffff; font-size: 11px; font-weight: 900; padding: 14px 28px; text-decoration: none; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">
-              Acessar Painel Online
-            </a>
-          </div>
-
-          <div style="margin-top: 40px; border-top: 1px solid #1e293b; padding-top: 20px; text-align: center; color: #475569; font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px;">
-            Este e-mail foi enviado automaticamente para todos os e-mails listados na permissão de acessos (App_Dash_Users) em ${new Date().toLocaleString('pt-BR')}.
-          </div>
-        </div>
+        </body>
+        </html>
       `;
 
       const Title = `[Alerta Operacional] Divergência em: ${metricTitle}`;
 
-      const response = await fetch('/api/send-email', {
+      const directEmailUrl = process.env.POWER_AUTOMATE_EMAIL_URL;
+      const emailEndpoint = directEmailUrl && directEmailUrl !== "MY_POWER_AUTOMATE_EMAIL_URL"
+        ? directEmailUrl
+        : "/api/send-email";
+
+      console.log(`Enviando e-mail de divergência via: ${emailEndpoint === directEmailUrl ? 'Link Direto (Vite Exposta)' : 'Proxy Local Express'}`);
+
+      const response = await fetch(emailEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
