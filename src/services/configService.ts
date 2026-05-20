@@ -18,6 +18,7 @@ const LIST_DIVISOES = "App_Dash_Divisoes";
 const LIST_CARDS = "App_Dash_Cards";
 const LIST_RULES = "App_Dash_Regras";
 export const LIST_USERS = "App_Dash_Users";
+export const LIST_CONFIGS = "App_Dash_Configs";
 
 export async function ensureSharePointConfig() {
   if (!hasSpContext()) return;
@@ -63,6 +64,25 @@ export async function ensureSharePointConfig() {
     }
     // Always ensure its columns
     await spListEnsureTextField(LIST_USERS, "Email");
+
+    // 5. Ensure Configs List exists
+    if (!(await spListExists(LIST_CONFIGS))) {
+      console.log(`Creating list ${LIST_CONFIGS}...`);
+      await spCreateList(LIST_CONFIGS);
+    }
+    // Always ensure its columns
+    await spListEnsureTextField(LIST_CONFIGS, "ConfigValue");
+
+    // Seed Configs if empty or TeamsChatId not present
+    try {
+      const configItems = await spListGetItems<any>(LIST_CONFIGS, { filter: "Title eq 'TeamsChatId'", top: 1 });
+      if (configItems.status && configItems.data.length === 0) {
+        console.log("Seeding TeamsChatId...");
+        await spListAddItem(LIST_CONFIGS, { Title: "TeamsChatId", ConfigValue: "19:39fa3bb7be4c4b82a762c6af137f181c@thread.v2" });
+      }
+    } catch (err) {
+      console.error("Error checking or seeding TeamsChatId config:", err);
+    }
 
     // Now check if each list is empty and seed data appropriately
     
@@ -689,4 +709,51 @@ export async function removeAllowedUser(id: string, email?: string): Promise<boo
 
   const res = await spListDeleteItem(LIST_USERS, Number(id));
   return res.status;
+}
+
+export async function getTeamsChatId(): Promise<string> {
+  const defaultVal = "19:39fa3bb7be4c4b82a762c6af137f181c@thread.v2";
+  if (!hasSpContext()) {
+    return localStorage.getItem('teams_chat_id_mock') || defaultVal;
+  }
+  try {
+    const res = await spListGetItems<any>(LIST_CONFIGS, {
+      filter: "Title eq 'TeamsChatId'",
+      top: 1
+    });
+    if (res.status && res.data.length > 0) {
+      return res.data[0].ConfigValue || defaultVal;
+    }
+    // If not found, add it
+    await spListAddItem(LIST_CONFIGS, { Title: "TeamsChatId", ConfigValue: defaultVal });
+    return defaultVal;
+  } catch (err) {
+    console.error("Error fetching teams chat ID:", err);
+    return defaultVal;
+  }
+}
+
+export async function saveTeamsChatId(chatId: string): Promise<boolean> {
+  const normalizedValue = String(chatId || '').trim();
+  if (!hasSpContext()) {
+    localStorage.setItem('teams_chat_id_mock', normalizedValue);
+    return true;
+  }
+  try {
+    const res = await spListGetItems<any>(LIST_CONFIGS, {
+      filter: "Title eq 'TeamsChatId'",
+      top: 1
+    });
+    if (res.status && res.data.length > 0) {
+      const id = res.data[0].Id;
+      const upRes = await spListUpdateItem(LIST_CONFIGS, id, { ConfigValue: normalizedValue });
+      return upRes.status;
+    } else {
+      const adRes = await spListAddItem(LIST_CONFIGS, { Title: "TeamsChatId", ConfigValue: normalizedValue });
+      return adRes.status;
+    }
+  } catch (err) {
+    console.error("Error saving teams chat ID:", err);
+    return false;
+  }
 }
