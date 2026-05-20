@@ -10,6 +10,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import Markdown from 'react-markdown';
+import html2canvas from 'html2canvas';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, LineChart, Line 
@@ -24,7 +25,8 @@ import {
   isUserAllowed,
   fetchAllowedUsers,
   addAllowedUser,
-  removeAllowedUser
+  removeAllowedUser,
+  getTeamsChatId
 } from '../services/configService';
 import { getCurrentSharePointUserEmail, hasSpContext } from '../services/spService';
 
@@ -637,6 +639,7 @@ export function Dashboard() {
     showKpiSla: true,
     audioAlertMode: 'none' as 'none' | 'beep' | 'ts' | 'both',
     enableEmailAlerts: false,
+    enableTeamsAlerts: false,
   });
 
   useEffect(() => {
@@ -997,6 +1000,191 @@ export function Dashboard() {
     }
   };
 
+  const sendingTeamsLocks = new Set<string>();
+
+  const sendTeamsNotification = async (metricTitle: string, details: any[]) => {
+    if (!preferences.enableTeamsAlerts) return;
+    const currentCount = details ? details.length : 0;
+    const lockKey = `${metricTitle}_${currentCount}`;
+
+    // 1. Bloqueio Concorrente de Memória para evitar envios duplicados repetidos
+    if (sendingTeamsLocks.has(lockKey)) {
+      console.log(`[Teams] Bloqueando envio duplicado concorrente para "${metricTitle}" com ${currentCount} registros.`);
+      return;
+    }
+    sendingTeamsLocks.add(lockKey);
+
+    const sentTeamsStorageKey = 'sent_teams_alerts';
+    try {
+      // 2. Bloqueio por Sincronização de Data no localStorage (Evitar re-envios frequentes no mesmo período)
+      const stored = localStorage.getItem(sentTeamsStorageKey);
+      let sentAlerts: Record<string, string> = {};
+      if (stored) {
+        try {
+          sentAlerts = JSON.parse(stored);
+        } catch (e) {
+          sentAlerts = {};
+        }
+      }
+
+      // Se já disparou este card há menos de 10 minutos com o mesmo número de erros, ignora
+      const lastSentTime = sentAlerts[metricTitle];
+      if (lastSentTime) {
+        const diffMs = Date.now() - new Date(lastSentTime).getTime();
+        const tenMinutes = 10 * 60 * 1000;
+        if (diffMs < tenMinutes) {
+          console.log(`[Teams] Alerta do Teams para "${metricTitle}" enviado recentemente (${Math.round(diffMs / 1000)}s atrás). Ignorando para evitar flood.`);
+          sendingTeamsLocks.add(lockKey); // Manter bloqueado
+          return;
+        }
+      }
+
+      // Registra no cache que está enviando agora
+      sentAlerts[metricTitle] = new Date().toISOString();
+      localStorage.setItem(sentTeamsStorageKey, JSON.stringify(sentAlerts));
+
+      console.log(`[Teams] Iniciando envio de desvio via Teams para o card "${metricTitle}"...`);
+
+      const directTeamsUrl = process.env.POWER_AUTOMATE_TEAMS_URL;
+      const teamsEndpoint = directTeamsUrl && directTeamsUrl !== "MY_POWER_AUTOMATE_TEAMS_URL"
+        ? directTeamsUrl
+        : "https://51a805d34213e248a3506f5db8fe28.55.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/d6034ec10bbe4c39b8e9b2e3d03f5e5a/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=miH_7ZEESA8UAeFa3_KUvuiij_05CJxaI0zwVIeufqA";
+
+      const teamsChatId = await getTeamsChatId();
+
+      // 3. Gerar print do painel usando html2canvas
+      let base64Image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="; //Fallback de 1x1 png transparente
+      const targetElement = document.getElementById('main-dashboard') || document.body;
+      
+      if (targetElement) {
+        try {
+          const canvas = await html2canvas(targetElement as HTMLElement, {
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: isWarRoom ? '#050510' : '#f8fafc',
+            scale: 0.85, // Escala ligeiramente otimizada para manter tamanho do payload leve
+            logging: false,
+            ignoreElements: (element) => {
+              // Ignorar botões do cabeçalho e modais flutuantes se houver
+              return element.classList?.contains('modal-excluir') || element.id === 'header-teams-config';
+            }
+          });
+          const imgData = canvas.toDataURL('image/png');
+          if (imgData && imgData.includes('base64,')) {
+            base64Image = imgData.split('base64,')[1];
+          }
+        } catch (screenshotErr) {
+          console.error("[Teams] Erro ao obter print da tela via html2canvas:", screenshotErr);
+        }
+      }
+
+      // 4. Estruturar tabela detalhada para as primeiras linhas
+      const rowsHtml = details && details.length > 0 
+        ? details.slice(0, 8).map((row, rIdx) => {
+            const keys = Object.keys(row).slice(0, 5); // limitar a 5 colunas principais
+            return `<tr style="border-bottom: 1px solid #e2e8f0; ${rIdx % 2 === 0 ? 'background-color: #f8fafc;' : ''}">
+              ${keys.map(k => `<td style="padding: 8px 10px; font-size: 11px; color: #334155; font-family: 'Segoe UI', Arial;">${String(row[k] ?? '')}</td>`).join('')}
+            </tr>`;
+          }).join('')
+        : '';
+
+      const headersHtml = details && details.length > 0
+        ? `<tr style="background-color: #f1f5f9; font-weight: bold; text-align: left; border-bottom: 2px solid #cbd5e1;">
+            ${Object.keys(details[0]).slice(0, 5).map(k => `<th style="padding: 8px 10px; font-size: 11px; text-transform: uppercase; color: #475569; font-family: 'Segoe UI', Arial;">${k}</th>`).join('')}
+           </tr>`
+        : '';
+
+      const detailsTable = rowsHtml 
+        ? `<table style="width: 100%; border-collapse: collapse; margin-top: 12px; margin-bottom: 18px; border: 1px solid #e2e8f0;">
+            <thead>${headersHtml}</thead>
+            <tbody>${rowsHtml}</tbody>
+           </table>`
+        : '<p style="color: #64748b; font-size: 12px; font-family: \'Segoe UI\', Arial;">Nenhuma linha de detalhe disponível.</p>';
+
+      const htmlBody = `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+          <div style="background-color: #8b0000; color: #ffffff; padding: 18px 24px;">
+            <h2 style="margin: 0; font-size: 18px; text-transform: uppercase; font-style: italic; font-weight: 900; letter-spacing: -0.5px; font-family: 'Segoe UI', Arial;">🚨 Alerta de Desvio Operacional</h2>
+            <p style="margin: 4px 0 0 0; font-size: 11px; opacity: 0.85; font-weight: bold; letter-spacing: 0.5px;">Painel de Controle em Tempo Real</p>
+          </div>
+          <div style="padding: 24px;">
+            <p style="font-size: 14px; margin-top: 0; color: #1e293b; font-family: 'Segoe UI', Arial;">Olá, equipe!</p>
+            <p style="font-size: 14px; color: #334155; font-family: 'Segoe UI', Arial; line-height: 1.5;">
+              Identificamos um comportamento impeditivo no card de monitoramento <strong>"${metricTitle}"</strong>. Seguem abaixo as informações da ocorrência e a captura em tempo real.
+            </p>
+            
+            <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 18px; margin: 20px 0; border-radius: 6px;">
+              <p style="margin: 0; font-size: 13px; color: #991b1b; font-weight: 900; font-family: 'Segoe UI', Arial;">
+                Métrica: ${metricTitle}
+              </p>
+              <p style="margin: 4px 0 0 0; font-size: 12px; color: #7f1d1d; font-family: 'Segoe UI', Arial; font-weight: 500;">
+                Divergências ativas: <strong>${currentCount}</strong> registros.
+              </p>
+            </div>
+
+            <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 24px; margin-bottom: 6px; color: #1e293b; font-family: 'Segoe UI', Arial;">Resumo dos Dados</h3>
+            ${detailsTable}
+
+            <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 24px; margin-bottom: 12px; color: #1e293b; font-family: 'Segoe UI', Arial;">Captura Visual do Dashboard</h3>
+            <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background-color: #f8fafc; padding: 10px; text-align: center;">
+              <img src="cid:print-dashboard.png" alt="Print do Dashboard" style="max-width: 100%; height: auto; border-radius: 4px;" />
+            </div>
+
+            <p style="font-size: 10px; color: #94a3b8; margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 15px; font-weight: bold; font-family: 'Segoe UI', Arial;">
+              ESTA É UMA NOTIFICAÇÃO AUTOMÁTICA DISPARADA PARA O MS TEAMS (CHAT ID: ${teamsChatId}). POR FAVOR, NÃO RESPONDA DIRETAMENTE.
+            </p>
+          </div>
+        </div>
+      `;
+
+      const teamsPayload = {
+        destinoTipo: "grupo",
+        chatId: teamsChatId,
+        html: htmlBody,
+        imagens: [
+          {
+            nome: "print-dashboard.png",
+            base64: base64Image,
+            contentType: "image/png",
+            alt: "Print do Dashboard em Tempo Real"
+          }
+        ]
+      };
+
+      const response = await fetch(teamsEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(teamsPayload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Teams API respondeu com status: ${response.status}`);
+      }
+
+      console.log(`[Teams] Alerta Teams enviado com sucesso para "${metricTitle}" no chat ${teamsChatId}`);
+      setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `Alerta Teams de divergência enviado para "${metricTitle}".`, time: new Date().toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
+    } catch (error: any) {
+      console.error("[Teams] Erro ao tentar enviar mensagem para o Teams:", error);
+      // Limpa do cache para nova tentativa
+      try {
+        const stored = localStorage.getItem(sentTeamsStorageKey);
+        if (stored) {
+          const sent = JSON.parse(stored);
+          delete sent[metricTitle];
+          localStorage.setItem(sentTeamsStorageKey, JSON.stringify(sent));
+        }
+      } catch (cleanErr) {}
+      setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `Falha no alerta Teams (${metricTitle}): ${error.message || error}`, time: new Date().toLocaleTimeString('pt-BR'), type: 'critical' as const }, ...prev] as any).slice(0, 50));
+    } finally {
+      // Libera o lock de concorrência breve em memória
+      setTimeout(() => {
+        sendingTeamsLocks.delete(lockKey);
+      }, 5000);
+    }
+  };
+
   // Permissions & Access Management States
   const [hasAdminAccess, setHasAdminAccess] = useState(false);
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
@@ -1202,6 +1390,7 @@ export function Dashboard() {
         // Trigger emails asynchronously for each detected divergence
         newlyFoundErrorList.forEach(errItem => {
           sendDivergenceEmail(errItem.title, errItem.data);
+          sendTeamsNotification(errItem.title, errItem.data);
         });
       } else if (resolvedErrors.length > 0) {
         triggerAlarm(`Excelente! Divergência resolvida na métrica: ${resolvedErrors.join(', ')}`, 'success');
@@ -1252,6 +1441,7 @@ export function Dashboard() {
       if (isNowError && !wasError) {
         triggerAlarm(`Alerta! Nova divergência detectada na métrica: ${metric.title}`, 'critical');
         sendDivergenceEmail(metric.title, Array.isArray(result) ? result : []);
+        sendTeamsNotification(metric.title, Array.isArray(result) ? result : []);
       } else if (!isNowError && wasError) {
         triggerAlarm(`Excelente! Divergência resolvida na métrica: ${metric.title}`, 'success');
       }
@@ -1317,7 +1507,7 @@ export function Dashboard() {
   };
 
   return (
-    <main className={`min-h-screen transition-colors duration-700 p-4 md:p-8 space-y-10 pb-32 ${isWarRoom ? 'bg-[#050510] text-white' : 'bg-slate-50 text-slate-900'}`}>
+    <main id="main-dashboard" className={`min-h-screen transition-colors duration-700 p-4 md:p-8 space-y-10 pb-32 ${isWarRoom ? 'bg-[#050510] text-white' : 'bg-slate-50 text-slate-900'}`}>
       {preferences.showHeader && (
         <header className={`flex flex-col sm:flex-row justify-between items-center mb-6 px-6 py-6 rounded-2xl transition-all duration-700 gap-6 mx-auto w-full ${isWarRoom ? 'bg-[#0f1125] border border-indigo-900/40 shadow-[0_0_40px_rgba(0,0,0,0.5)] max-w-[1700px]' : 'bg-white shadow-sm border border-slate-200 max-w-[1400px]'}`}>
           <div className="flex items-center gap-4">
@@ -1538,6 +1728,26 @@ export function Dashboard() {
                         >
                           <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
                             preferences.enableEmailAlerts ? 'translate-x-[22px]' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+
+                      <div className="border-t border-slate-200/20 my-1" />
+
+                      {/* Teams alerts config */}
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-tight">Notificações via Teams</p>
+                          <p className="text-[9px] text-slate-500">Enviar desvio e print do painel para o Teams</p>
+                        </div>
+                        <button
+                          onClick={() => savePreferences({ ...preferences, enableTeamsAlerts: !preferences.enableTeamsAlerts })}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 ${
+                            preferences.enableTeamsAlerts ? 'bg-brand-red' : isWarRoom ? 'bg-[#1f4e79]' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
+                            preferences.enableTeamsAlerts ? 'translate-x-[22px]' : 'translate-x-1'
                           }`} />
                         </button>
                       </div>

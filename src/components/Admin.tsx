@@ -20,7 +20,9 @@ import {
   addAllowedUser,
   removeAllowedUser,
   saveDivisionsIndices,
-  saveMetricsIndices
+  saveMetricsIndices,
+  getTeamsChatId,
+  saveTeamsChatId
 } from '../services/configService';
 import { getCurrentSharePointUserEmail, hasSpContext } from '../services/spService';
 
@@ -43,6 +45,11 @@ export function Admin() {
   const [newAccessEmail, setNewAccessEmail] = useState('');
   const [isSavingAccess, setIsSavingAccess] = useState(false);
   const [accessMessage, setAccessMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Teams Settings
+  const [teamsChatId, setTeamsChatId] = useState('');
+  const [isSavingTeamsChatId, setIsSavingTeamsChatId] = useState(false);
+  const [teamsMessage, setTeamsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [draggedSectionIndex, setDraggedSectionIndex] = useState<number | null>(null);
   const [draggedMetricIndex, setDraggedMetricIndex] = useState<{ sectionId: string, index: number } | null>(null);
@@ -165,6 +172,8 @@ export function Admin() {
     if (allowed) {
       const data = await fetchDashboardConfig();
       setSections(data);
+      const teamsId = await getTeamsChatId();
+      setTeamsChatId(teamsId);
     }
     setIsCheckingAccess(false);
     setIsLoading(false);
@@ -194,6 +203,24 @@ export function Admin() {
       setStatusMessage({ type: 'error', text: `Erro ao salvar divisão: ${err.message}` });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveTeamsChatId = async () => {
+    setIsSavingTeamsChatId(true);
+    setTeamsMessage(null);
+    try {
+      const ok = await saveTeamsChatId(teamsChatId);
+      if (ok) {
+        setTeamsMessage({ type: 'success', text: 'ID do grupo Teams atualizado com sucesso!' });
+        setTimeout(() => setTeamsMessage(null), 5000);
+      } else {
+        setTeamsMessage({ type: 'error', text: 'Ocorreu um erro ao salvar o ID no SharePoint' });
+      }
+    } catch (err: any) {
+      setTeamsMessage({ type: 'error', text: err?.message || 'Erro ao conectar ao SharePoint.' });
+    } finally {
+      setIsSavingTeamsChatId(false);
     }
   };
 
@@ -318,6 +345,61 @@ export function Admin() {
       </header>
 
       <main className="max-w-6xl mx-auto space-y-6 sm:space-y-8 pb-32">
+        {/* Painel de Integração Teams */}
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 sm:p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 sm:p-3 bg-[#e6f0fa] text-[#1f4e79] rounded-xl flex-shrink-0">
+                <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-base font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
+                  Notificações do Microsoft Teams 
+                  <span className="text-[9px] font-black uppercase bg-[#1f4e79] text-white px-2 py-0.5 rounded-full">Integração</span>
+                </h3>
+                <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Defina o ID do canal/chat Teams de destino (lista SharePoint <strong>App_Dash_Configs</strong>).</p>
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md w-full md:w-auto">
+              <div className="flex-grow">
+                <input 
+                  type="text" 
+                  value={teamsChatId}
+                  onChange={(e) => setTeamsChatId(e.target.value)}
+                  placeholder="ID do Chat do Teams"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-950 font-mono text-xs font-bold rounded-xl outline-none focus:ring-2 focus:ring-slate-950 transition-all"
+                />
+              </div>
+              <button 
+                onClick={handleSaveTeamsChatId}
+                disabled={isSavingTeamsChatId}
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" /> {isSavingTeamsChatId ? 'Salvando...' : 'Salvar ID'}
+              </button>
+            </div>
+          </div>
+
+          <AnimatePresence>
+            {teamsMessage && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className={`mt-4 p-3 rounded-xl border font-bold text-xs uppercase tracking-wide flex items-center gap-2 ${
+                  teamsMessage.type === 'success' 
+                    ? 'bg-emerald-50 border-emerald-100 text-emerald-600' 
+                    : 'bg-red-50 border-red-100 text-red-600'
+                }`}
+              >
+                <Shield className="w-4 h-4" />
+                {teamsMessage.text}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 className="text-lg sm:text-xl font-black uppercase italic tracking-tight flex items-center gap-2">
             <Layout className="w-5 h-5 text-brand-red" /> Divisões do Dashboard
