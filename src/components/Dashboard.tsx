@@ -130,9 +130,14 @@ function useScrollIndicator(ref: RefObject<HTMLDivElement | null>) {
 function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, onRefresh?: (m: Metric) => void, hideUI?: boolean, className?: string }) {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const isRefreshingRef = useRef(false);
+  const onRefreshRef = useRef(onRefresh);
 
   useEffect(() => {
-    if (!metric || !metric.refreshInterval || !onRefresh) return;
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
+
+  useEffect(() => {
+    if (!metric || !metric.refreshInterval || !onRefreshRef.current) return;
     
     isRefreshingRef.current = false;
 
@@ -152,7 +157,9 @@ function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, o
     // If we're already at zero, trigger refresh once
     if (initial <= 0 && !isRefreshingRef.current) {
       isRefreshingRef.current = true;
-      onRefresh(metric);
+      if (onRefreshRef.current) {
+        onRefreshRef.current(metric);
+      }
     }
 
     const timer = setInterval(() => {
@@ -160,7 +167,9 @@ function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, o
       setTimeLeft(remaining);
       if (remaining <= 0 && !isRefreshingRef.current) {
         isRefreshingRef.current = true;
-        onRefresh(metric);
+        if (onRefreshRef.current) {
+          onRefreshRef.current(metric);
+        }
       } else if (remaining > 0) {
         // Reset the flag if we have time again (meaning data updated)
         isRefreshingRef.current = false;
@@ -170,7 +179,7 @@ function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, o
     return () => {
       clearInterval(timer);
     };
-  }, [metric.lastUpdateAt, metric.refreshInterval, metric.id, onRefresh]);
+  }, [metric.lastUpdateAt, metric.refreshInterval, metric.id]);
 
   if (hideUI) return null;
   if (timeLeft === null || !metric.refreshInterval) return null;
@@ -660,6 +669,28 @@ export function Dashboard() {
     try {
       console.log(`Iniciando envio de e-mail de alerta para a métrica: ${metricTitle}...`);
       
+      const currentCount = details ? details.length : 0;
+      
+      // Evitar envio duplicado ou repetido se já disparou para esta métrica com esta quantidade de erros nos últimos 30 minutos
+      const sentStorageKey = 'sent_divergence_alerts';
+      let sentAlerts: Record<string, { lastSentAt: number; count: number }> = {};
+      try {
+        const stored = localStorage.getItem(sentStorageKey);
+        if (stored) {
+          sentAlerts = JSON.parse(stored);
+        }
+      } catch (e) {
+        console.error("Erro ao ler alertas enviados do localStorage:", e);
+      }
+
+      const nowTime = Date.now();
+      const lastAlert = sentAlerts[metricTitle];
+
+      if (lastAlert && lastAlert.count === currentCount && (nowTime - lastAlert.lastSentAt) < 30 * 60 * 1000) {
+        console.log(`[Email] Ignorando envio para a métrica "${metricTitle}" - Alerta idêntico recente enviado há menos de 30 minutos.`);
+        return;
+      }
+      
       const users = await fetchAllowedUsers();
       if (!users || users.length === 0) {
         console.warn("Nenhum usuário cadastrado na lista de acesso App_Dash_Users. E-mail não será enviado.");
@@ -692,41 +723,41 @@ export function Dashboard() {
         }
       }
 
-      // Build modern, stylish HTML body with a premium dark slate/crimson design
+      // Build modern, stylish HTML body with a premium light neutral design
       let tableRowsHtml = '';
       if (details && details.length > 0) {
         const columns = Object.keys(details[0]).slice(0, 5);
         
         const headerHtml = columns.map(c => `
-          <th style="padding: 12px 10px; border-bottom: 2px solid #ef4444; text-align: left; font-size: 11px; text-transform: uppercase; color: #f8fafc; font-weight: 900; letter-spacing: 0.5px;">${c}</th>
+          <th style="padding: 10px 8px; border-bottom: 2px solid #e2e8f0; text-align: left; font-size: 11px; text-transform: uppercase; color: #475569; font-weight: 700; letter-spacing: 0.5px;">${c}</th>
         `).join('');
         
         const rowsHtml = details.slice(0, 15).map((row, idx) => {
           const cells = columns.map(c => {
             const rawVal = row[c];
             const val = rawVal === null || rawVal === undefined ? '' : typeof rawVal === 'object' ? JSON.stringify(rawVal) : String(rawVal);
-            return `<td style="padding: 10px; border-bottom: 1px solid #1f2937; font-size: 11px; color: #cbd5e1; font-family: monospace;">${val}</td>`;
+            return `<td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 11px; color: #475569; font-family: monospace;">${val}</td>`;
           }).join('');
-          const bg = idx % 2 === 0 ? '#111827' : '#1f2937';
+          const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
           return `<tr style="background-color: ${bg};">${cells}</tr>`;
         }).join('');
 
         const truncateWarning = details.length > 15 
-          ? `<tr><td colspan="${columns.length}" style="text-align: center; padding: 12px; color: #fca5a5; font-size: 11px; font-weight: 700; background-color: #7f1d1d; letter-spacing: 0.5px;">Exibindo os 15 primeiros registros na tabela. A planilha completa (total de ${details.length} desvios) foi anexada em formato Excel (.xlsx).</td></tr>`
-          : `<tr><td colspan="${columns.length}" style="text-align: center; padding: 10px; color: #10b981; font-size: 10px; font-weight: bold; background-color: rgba(16, 185, 129, 0.05); text-transform: uppercase; letter-spacing: 0.5px;">Todos os ${details.length} registros foram listados acima e a planilha completa foi anexa.</td></tr>`;
+          ? `<tr><td colspan="${columns.length}" style="text-align: center; padding: 12px; color: #ef4444; font-size: 11px; font-weight: 600; background-color: #fef2f2; border-top: 1px dashed #fee2e2;">Exibindo os 15 primeiros registros. A planilha completa com todos os ${details.length} desvios foi anexada (.xlsx).</td></tr>`
+          : `<tr><td colspan="${columns.length}" style="text-align: center; padding: 10px; color: #10b981; font-size: 10px; font-weight: bold; background-color: #f0fdf4; border-top: 1px dashed #dcfce7; text-transform: uppercase; letter-spacing: 0.5px;">Todos os ${details.length} registros foram detectados e listados acima.</td></tr>`;
 
         tableRowsHtml = `
-          <div style="margin: 15px 0; border-radius: 12px; overflow: hidden; border: 1px solid #374151; box-shadow: 0 4px 15px rgba(0,0,0,0.25);">
-            <table style="width: 100%; border-collapse: collapse;">
+          <div style="margin: 12px 0; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
               <thead>
-                <tr style="background-color: #1f2937;">${headerHtml}</tr>
+                <tr style="background-color: #f8fafc;">${headerHtml}</tr>
               </thead>
               <tbody>${rowsHtml}${truncateWarning}</tbody>
             </table>
           </div>
         `;
       } else {
-        tableRowsHtml = `<p style="color: #9cb3af; font-style: italic; background-color: #111827; padding: 16px; border-radius: 8px; border: 1px dashed #374151;">Nenhum detalhe adicional disponível para esta divergência.</p>`;
+        tableRowsHtml = `<p style="color: #64748b; font-style: italic; background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px dashed #cbd5e1; font-size: 13px; text-align: center;">Nenhum detalhe adicional disponível para esta divergência.</p>`;
       }
 
       const bodyHtml = `
@@ -736,91 +767,92 @@ export function Dashboard() {
           <meta charset="utf-8">
           <title>[ALERTA] Divergência Operacional</title>
         </head>
-        <body style="margin: 0; padding: 0; background-color: #0b0f19;">
-          <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0b0f19; padding: 40px 20px; color: #f3f4f6;">
-            <!-- Inner container -->
-            <div style="max-width: 650px; margin: 0 auto; background-color: #111827; border-radius: 16px; border: 1px solid #374151; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.35);">
+        <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+          <div style="background-color: #f8fafc; padding: 30px 15px; color: #1e293b;">
+            <!-- Container principal -->
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);">
               
-              <!-- Top Decorative Red Bar -->
-              <div style="background-color: #d00000; height: 6px;"></div>
+              <!-- Linha superior de destaque (Vermelho de Alerta) -->
+              <div style="background-color: #ef4444; height: 4px;"></div>
               
-              <div style="padding: 35px 30px;">
-                <!-- Header -->
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+              <!-- Cabeçalho Principal -->
+              <div style="padding: 30px; border-bottom: 1px solid #f1f5f9;">
+                <table style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td>
-                      <span style="background-color: #fee2e2; color: #b91c1c; font-size: 9px; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1.5px; display: inline-block; font-family: monospace;">SISTEMA AUTOMÁTICO</span>
-                      <h1 style="color: #ffffff; font-size: 24px; font-weight: 800; margin: 8px 0 2px 0; font-family: 'Segoe UI', sans-serif; letter-spacing: -0.5px; text-transform: uppercase;">MONITOR <span style="color: #d00000;">OPERACIONAL</span></h1>
-                      <p style="color: #9ca3af; font-size: 11px; margin: 0; text-transform: uppercase; letter-spacing: 1px;">Gestão Integrada de Desvios & SLAs</p>
+                      <span style="font-size: 11px; font-weight: 700; color: #ef4444; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 6px;">SISTEMA DE ALERTA OPERACIONAL</span>
+                      <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase; letter-spacing: -0.5px;">
+                        DHL Supply Chain
+                      </h1>
                     </td>
-                    <td style="text-align: right; vertical-align: top;">
-                      <span style="display: inline-block; background-color: #7f1d1d; color: #fca5a5; font-size: 10px; font-weight: 700; padding: 6px 12px; border-radius: 8px; border: 1px solid #b91c1c;">
-                        🔴 ALERTA OPERACIONAL
+                    <td style="text-align: right; vertical-align: middle;">
+                      <span style="background-color: #fef2f2; border: 1px solid #fee2e2; color: #991b1b; font-size: 10px; font-weight: 700; padding: 6px 12px; border-radius: 6px; display: inline-block;">
+                        Divergência Ativa
                       </span>
                     </td>
                   </tr>
                 </table>
-                
-                <!-- Divider -->
-                <hr style="border: 0; border-top: 1px solid #1f2937; margin: 25px 0;" />
-                
-                <!-- Intro message -->
-                <p style="font-size: 15px; color: #e5e7eb; line-height: 1.6; margin: 0 0 15px 0;">
-                  Prezada equipe operacional,
+              </div>
+
+              <!-- Conteúdo do E-mail -->
+              <div style="padding: 30px;">
+                <p style="font-size: 15px; font-weight: 600; color: #0f172a; margin-top: 0; margin-bottom: 12px;">
+                  Olá, equipe de monitoramento,
                 </p>
-                
-                <p style="font-size: 14px; color: #9ca3af; line-height: 1.6; margin: 0 0 25px 0;">
-                  Foi identificada uma <strong>nova divergência operacional ativa</strong> no monitoramento de dados que requer verificação imediata. Consulte as especificações abaixo:
+                <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 24px 0;">
+                  Identificamos um novo desvio operacional na métrica registrada abaixo. Por favor, verifique os detalhes para assegurar a conformidade operacional e os prazos de SLA acordados.
                 </p>
-                
-                <!-- Metric Highlights Card -->
-                <div style="background-color: #1f2937; border-left: 4px solid #d00000; border-radius: 4px 12px 12px 4px; padding: 20px; margin-bottom: 30px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.15);">
+
+                <!-- Card de Informações da Métrica -->
+                <div style="background-color: #f8fafc; border-left: 4px solid #ef4444; border-radius: 0 8px 8px 0; padding: 20px; margin-bottom: 24px;">
                   <table style="width: 100%; border-collapse: collapse;">
                     <tr>
-                      <td style="padding-bottom: 10px;">
-                        <span style="color: #9ca3af; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px;">Métrica Monitorada</span>
-                        <span style="color: #ffffff; font-size: 18px; font-weight: 800; text-transform: uppercase; tracking: -0.25px;">${metricTitle}</span>
+                      <td style="padding-bottom: 8px;">
+                        <span style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block;">Métrica Afetada</span>
+                        <span style="font-size: 16px; font-weight: 700; color: #0f172a;">${metricTitle}</span>
                       </td>
                     </tr>
                     <tr>
-                      <td style="padding-top: 12px; border-top: 1px solid #374151;">
-                        <span style="color: #9ca3af; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px;">Total de Registros Afetados</span>
-                        <span style="color: #fca5a5; font-size: 15px; font-weight: 700;">${details.length} desvios detectados</span>
+                      <td style="padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                        <span style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block;">Divergências Detectadas</span>
+                        <span style="font-size: 14px; font-weight: 700; color: #b91c1c;">${currentCount} registros de desvios</span>
                       </td>
                     </tr>
                   </table>
                 </div>
-                
-                <!-- Table Header Title -->
-                <h3 style="color: #ffffff; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 12px 0;">Amostra de Divergências Encontradas (15 Primeiros)</h3>
-                
-                <!-- Table container -->
+
+                <!-- Seção de Registros -->
+                <h3 style="font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px 0;">
+                  Amostra das Divergências (Top 15)
+                </h3>
+
+                <!-- Tabela -->
                 ${tableRowsHtml}
-                
-                <!-- Button Banner -->
-                <div style="margin-top: 40px; text-align: center; background: linear-gradient(135deg, #1f2937 0%, #111827 100%); padding: 30px; border-radius: 12px; border: 1px solid #374151;">
-                  <p style="color: #9ca3af; font-size: 12px; margin: 0 0 16px 0; line-height: 1.5;">
-                    A planilha completa no formato <strong>Excel (.xlsx)</strong> foi gerada em tempo real e anexada nesta notificação para análise integrada.
+
+                <!-- Rodapé do Card Interno com Botão -->
+                <div style="margin-top: 24px; padding: 20px; text-align: center; background-color: #f8fafc; border-radius: 8px; border: 1px solid #f1f5f9;">
+                  <p style="font-size: 12px; line-height: 1.5; color: #64748b; margin: 0 0 16px 0;">
+                    A planilha com a listagem completa em formato Excel (.xlsx) foi gerada pelo sistema e está em anexo a esta notificação.
                   </p>
-                  <a href="${window.location.origin}" style="display: inline-block; background-color: #d00000; color: #ffffff; font-size: 12px; font-weight: 800; padding: 14px 28px; text-decoration: none; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(208, 0, 0, 0.45); text-align: center; font-style: normal;">
-                    Acessar Painel Integrado
+                  <a href="${window.location.origin}" style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 11px; font-weight: 700; padding: 12px 24px; text-decoration: none; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    Acessar Painel Online
                   </a>
                 </div>
-                
               </div>
-              
-              <!-- Footer -->
-              <div style="background-color: #1f2937; padding: 25px 30px; text-align: center; border-top: 1px solid #374151;">
-                <p style="color: #9ca3af; font-size: 10px; margin: 0; line-height: 1.5; text-transform: uppercase; letter-spacing: 1px;">
-                  Monitor Operacional • DHL Supply Chain
+
+              <!-- Rodapé Externo -->
+              <div style="background-color: #f8fafc; border-top: 1px solid #f1f5f9; padding: 24px 30px; text-align: center;">
+                <p style="font-size: 11px; font-weight: 600; color: #64748b; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+                  Painel de Monitoramento de SLAs
                 </p>
-                <p style="color: #6b7280; font-size: 9px; margin: 8px 0 0 0; text-transform: uppercase; letter-spacing: 1px;">
-                  Este e-mail é gerado automaticamente pelo robô de monitoramento de SLAs. Não responda a esta mensagem.
+                <p style="font-size: 10px; color: #94a3b8; margin: 0 0 12px 0;">
+                  Notificação automática. Por favor, não responda a este e-mail.
                 </p>
-                <p style="color: #6b7280; font-size: 9px; margin: 4px 0 0 0;">
-                  Data e hora da detecção: ${new Date().toLocaleString('pt-BR')} (UTC)
+                <p style="font-size: 10px; color: #94a3b8; margin: 0;">
+                  Gerado em: ${new Date().toLocaleString('pt-BR')} (UTC)
                 </p>
               </div>
+
             </div>
           </div>
         </body>
@@ -854,6 +886,14 @@ export function Dashboard() {
       }
 
       console.log(`E-mail com planilha Excel anexada enviado com sucesso para: ${emailListString}`);
+      
+      // Salvar marca de envio após sucesso para evitar reenvios repetitivos nos próximos 30 minutos
+      sentAlerts[metricTitle] = {
+        lastSentAt: nowTime,
+        count: currentCount
+      };
+      localStorage.setItem(sentStorageKey, JSON.stringify(sentAlerts));
+
       setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `E-mail de desvio enviado à lista com planilha Excel anexada para "${metricTitle}".`, time: new Date().toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
     } catch (error: any) {
       console.error("Erro ao tentar enviar e-mail via Power Automate:", error);
