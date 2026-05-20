@@ -27,6 +27,8 @@ import {
 } from '../services/configService';
 import { getCurrentSharePointUserEmail, hasSpContext } from '../services/spService';
 
+const sendingEmailLocks = new Set<string>();
+
 function playAlertBeep(type: 'warning' | 'critical' | 'success' = 'warning') {
   try {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -666,14 +668,24 @@ export function Dashboard() {
 
   const sendDivergenceEmail = async (metricTitle: string, details: any[]) => {
     if (!preferences.enableEmailAlerts) return;
+    const currentCount = details ? details.length : 0;
+    const lockKey = `${metricTitle}_${currentCount}`;
+
+    // 1. Bloqueio Concorrente de Memória (E-mails disparados simultaneamente)
+    if (sendingEmailLocks.has(lockKey)) {
+      console.log(`[Email] Bloqueando envio duplicado concorrente em memória para "${metricTitle}" com ${currentCount} registros.`);
+      return;
+    }
+    sendingEmailLocks.add(lockKey);
+
+    const sentStorageKey = 'sent_divergence_alerts';
+    let sentAlerts: Record<string, { lastSentAt: number; count: number }> = {};
+    const nowTime = Date.now();
+
     try {
       console.log(`Iniciando envio de e-mail de alerta para a métrica: ${metricTitle}...`);
       
-      const currentCount = details ? details.length : 0;
-      
-      // Evitar envio duplicado ou repetido se já disparou para esta métrica com esta quantidade de erros nos últimos 30 minutos
-      const sentStorageKey = 'sent_divergence_alerts';
-      let sentAlerts: Record<string, { lastSentAt: number; count: number }> = {};
+      // 2. Bloqueio Persistente (Evitar envio repetido nos últimos 30 minutos se a quantidade for idêntica)
       try {
         const stored = localStorage.getItem(sentStorageKey);
         if (stored) {
@@ -683,23 +695,31 @@ export function Dashboard() {
         console.error("Erro ao ler alertas enviados do localStorage:", e);
       }
 
-      const nowTime = Date.now();
       const lastAlert = sentAlerts[metricTitle];
-
       if (lastAlert && lastAlert.count === currentCount && (nowTime - lastAlert.lastSentAt) < 30 * 60 * 1000) {
         console.log(`[Email] Ignorando envio para a métrica "${metricTitle}" - Alerta idêntico recente enviado há menos de 30 minutos.`);
+        sendingEmailLocks.delete(lockKey);
         return;
       }
+
+      // IMPORTANTE: Grava imediatamente no localStorage ANTES do processo assíncrono para blindar possíveis concorrências
+      sentAlerts[metricTitle] = {
+        lastSentAt: nowTime,
+        count: currentCount
+      };
+      localStorage.setItem(sentStorageKey, JSON.stringify(sentAlerts));
       
       const users = await fetchAllowedUsers();
       if (!users || users.length === 0) {
         console.warn("Nenhum usuário cadastrado na lista de acesso App_Dash_Users. E-mail não será enviado.");
+        sendingEmailLocks.delete(lockKey);
         return;
       }
       
       const emailListString = users.map(u => u.email).filter(Boolean).join(',');
       if (!emailListString) {
         console.warn("Nenhum endereço de e-mail válido encontrado na lista de acessos.");
+        sendingEmailLocks.delete(lockKey);
         return;
       }
 
@@ -723,7 +743,31 @@ export function Dashboard() {
         }
       }
 
-      // Build modern, stylish HTML body with a premium light neutral design
+      // Determinar o Link completo do arquivo atual no SharePoint
+      let currentSharepointPageUrl = window.location.origin;
+      if (window._spPageContextInfo) {
+        const ctx = window._spPageContextInfo;
+        const webUrl = ctx.webAbsoluteUrl || ctx.siteAbsoluteUrl;
+        const requestPath = ctx.serverRequestPath;
+        if (webUrl && requestPath) {
+          try {
+            const urlObj = new URL(webUrl);
+            currentSharepointPageUrl = urlObj.origin + requestPath;
+          } catch {
+            currentSharepointPageUrl = webUrl + requestPath;
+          }
+        } else if (webUrl) {
+          currentSharepointPageUrl = webUrl;
+        }
+      } else {
+        if (document.referrer && document.referrer.includes('.sharepoint.com')) {
+          currentSharepointPageUrl = document.referrer;
+        } else {
+          currentSharepointPageUrl = window.location.href;
+        }
+      }
+
+      // Build modern, stylish HTML body matching the requested layout design
       let tableRowsHtml = '';
       if (details && details.length > 0) {
         const columns = Object.keys(details[0]).slice(0, 5);
@@ -866,7 +910,7 @@ export function Dashboard() {
                               A planilha Excel (.xlsx) com a listagem completa com todos os desvios foi gerada pelo sistema e anexada a este e-mail para análise integrada. Você também pode visualizar os dados atualizados clicando no link abaixo.
                             </p>
                             <div style="margin-top:20px; text-align:center;">
-                              <a href="${window.location.origin}" style="display:inline-block; background-color:#d40511; color:#ffffff; font-size:12px; font-weight:bold; padding:12px 24px; text-decoration:none; border-radius:8px; text-transform:uppercase; letter-spacing:1px; box-shadow:0 4px 10px rgba(212,5,17,0.25);">
+                              <a href="${currentSharepointPageUrl}" style="display:inline-block; background-color:#d40511; color:#ffffff; font-size:12px; font-weight:bold; padding:12px 24px; text-decoration:none; border-radius:8px; text-transform:uppercase; letter-spacing:1px; box-shadow:0 4px 10px rgba(212,5,17,0.25);">
                                 Acessar Painel Online
                               </a>
                             </div>
@@ -931,18 +975,24 @@ export function Dashboard() {
       }
 
       console.log(`E-mail com planilha Excel anexada enviado com sucesso para: ${emailListString}`);
-      
-      // Salvar marca de envio após sucesso para evitar reenvios repetitivos nos próximos 30 minutos
-      sentAlerts[metricTitle] = {
-        lastSentAt: nowTime,
-        count: currentCount
-      };
-      localStorage.setItem(sentStorageKey, JSON.stringify(sentAlerts));
-
       setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `E-mail de desvio enviado à lista com planilha Excel anexada para "${metricTitle}".`, time: new Date().toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
     } catch (error: any) {
       console.error("Erro ao tentar enviar e-mail via Power Automate:", error);
+      // Remove do localStorage para permitir nova tentativa em caso de erro absoluto de envio
+      try {
+        const stored = localStorage.getItem(sentStorageKey);
+        if (stored) {
+          const sent = JSON.parse(stored);
+          delete sent[metricTitle];
+          localStorage.setItem(sentStorageKey, JSON.stringify(sent));
+        }
+      } catch (cleanErr) {}
       setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `Falha no envio de e-mail (${metricTitle}): ${error.message || error}`, time: new Date().toLocaleTimeString('pt-BR'), type: 'critical' as const }, ...prev] as any).slice(0, 50));
+    } finally {
+      // Manter o lock temporário em memória por 10 segundos adicionais para amparar flutuações e sincronizações em série
+      setTimeout(() => {
+        sendingEmailLocks.delete(lockKey);
+      }, 10000);
     }
   };
 
