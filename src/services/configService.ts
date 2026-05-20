@@ -8,7 +8,8 @@ import {
   spListGetItems,
   spListAddItem,
   spListUpdateItem,
-  spListDeleteItem
+  spListDeleteItem,
+  getCurrentSharePointUserEmail
 } from './spService';
 import { SQL_QUERY_ESTOQUE, SQL_QUERY_VALIDACAO_SISTEMICA, SQL_QUERY_SEPARACAO_SALDO } from './queryService';
 import { Section, Metric } from '../types';
@@ -16,6 +17,7 @@ import { Section, Metric } from '../types';
 const LIST_DIVISOES = "App_Dash_Divisoes";
 const LIST_CARDS = "App_Dash_Cards";
 const LIST_RULES = "App_Dash_Regras";
+export const LIST_USERS = "App_Dash_Users";
 
 export async function ensureSharePointConfig() {
   if (!hasSpContext()) return;
@@ -124,6 +126,22 @@ export async function ensureSharePointConfig() {
         await spListEnsureNumberField(LIST_RULES, "CardId");
       }
     }
+
+    // Ensure App_Dash_Users list exists and fields are correct
+    if (!(await spListExists(LIST_USERS))) {
+      console.log("Creating list Users (App_Dash_Users)...");
+      await spCreateList(LIST_USERS);
+      await spListEnsureTextField(LIST_USERS, "Email");
+      
+      const currentEmail = getCurrentSharePointUserEmail();
+      if (currentEmail) {
+        await spListAddItem(LIST_USERS, { Title: currentEmail, Email: currentEmail });
+      }
+      await spListAddItem(LIST_USERS, { Title: "arlenloran@gmail.com", Email: "arlenloran@gmail.com" });
+    } else {
+      await spListEnsureTextField(LIST_USERS, "Email");
+    }
+
     console.log("Config structure verified.");
   } catch (err) {
     console.error("Critical error ensuring SharePoint structure:", err);
@@ -133,10 +151,11 @@ export async function ensureSharePointConfig() {
 export async function addDivision(title: string, orderIndex: number) {
   if (!hasSpContext()) {
     const sections = getLocalConfigFromStorage();
-    const newDiv = { title, metrics: [] };
+    const newId = `mock_sec_${Math.random()}`;
+    const newDiv: Section = { id: newId, title, orderIndex, metrics: [] };
     sections.push(newDiv);
     localStorage.setItem('dash_config_mock', JSON.stringify(sections));
-    return { id: Math.random().toString(), Title: title, OrderIndex: orderIndex };
+    return { id: newId, Title: title, OrderIndex: orderIndex };
   }
   const res = await spListAddItem(LIST_DIVISOES, { Title: title, OrderIndex: orderIndex });
   if (res.status) return res.data;
@@ -146,9 +165,11 @@ export async function addDivision(title: string, orderIndex: number) {
 export async function updateDivision(id: string, title: string, orderIndex: number) {
   if (!hasSpContext()) {
     const sections = getLocalConfigFromStorage();
-    // In mock mode, we use title as ID sometimes or index
-    const section = sections.find(s => s.title === id || s.id === id);
-    if (section) section.title = title;
+    const section = sections.find(s => s.id === id || s.title === id);
+    if (section) {
+      section.title = title;
+      section.orderIndex = orderIndex;
+    }
     localStorage.setItem('dash_config_mock', JSON.stringify(sections));
     return { id, Title: title, OrderIndex: orderIndex };
   }
@@ -190,6 +211,7 @@ export async function addMetric(divisionId: string, metric: Partial<Metric>) {
         status: 'ok' as const,
         lastUpdate: now.toLocaleString('pt-BR'),
         lastUpdateAt: now.toISOString(),
+        orderIndex: metric.orderIndex || (section.metrics.length + 1),
         history: [],
         details: []
       } as Metric;
@@ -204,7 +226,7 @@ export async function addMetric(divisionId: string, metric: Partial<Metric>) {
     SqlQuery: metric.sqlQuery,
     Objective: metric.objective,
     RefreshInterval: metric.refreshInterval,
-    OrderIndex: 1, // Default
+    OrderIndex: metric.orderIndex || 1,
     LastUpdateDate: new Date().toISOString()
   });
   
@@ -241,6 +263,9 @@ export async function updateMetric(id: string, metric: Partial<Metric>) {
     RefreshInterval: metric.refreshInterval,
     LastUpdateDate: metric.lastUpdateAt || new Date().toISOString()
   };
+  if (metric.orderIndex !== undefined) {
+    fields.OrderIndex = metric.orderIndex;
+  }
   const res = await spListUpdateItem(LIST_CARDS, Number(id), fields);
   if (!res.status) throw new Error(res.message);
 
@@ -287,6 +312,7 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
     const sections: Section[] = divisions.map((div: any) => ({
       id: String(div.Id),
       title: div.Title,
+      orderIndex: div.OrderIndex || 0,
       metrics: cards
         .filter((c: any) => Number(c.DivisionId) === Number(div.Id))
         .map((c: any) => {
@@ -325,15 +351,22 @@ export async function fetchDashboardConfig(): Promise<Section[]> {
             sqlQuery: c.SqlQuery, // Persist query to fetch later
             history: history,
             details: cachedDetails,
-            rules: cardRules
+            rules: cardRules,
+            orderIndex: c.OrderIndex || 0
           };
         })
     }));
 
+    // Sort sections and their metrics to make sure sorting is strictly applied
+    sections.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+    sections.forEach(s => {
+      s.metrics.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+    });
+
     return sections;
   } catch (error) {
     console.error("Config fetch error:", error);
-    return getLocalConfig();
+    return getLocalConfigFromStorage();
   }
 }
 
@@ -375,14 +408,85 @@ export async function saveMetricData(metricId: string, dateIso: string, data?: a
 
 function getLocalConfigFromStorage(): Section[] {
   const saved = localStorage.getItem('dash_config_mock');
+  let sections: Section[] = [];
   if (saved) {
     try {
-      return JSON.parse(saved);
+      sections = JSON.parse(saved);
     } catch (e) {
-      return getLocalConfig();
+      sections = getLocalConfig();
     }
+  } else {
+    sections = getLocalConfig();
   }
-  return getLocalConfig();
+
+  // Ensure default IDs and OrderIndices exist in mock mode
+  sections.forEach((s, sIdx) => {
+    if (!s.id) s.id = `mock_sec_${sIdx + 1}`;
+    if (s.orderIndex === undefined) s.orderIndex = sIdx + 1;
+    s.metrics.forEach((m, mIdx) => {
+      if (!m.id) m.id = `mock_met_${sIdx + 1}_${mIdx + 1}`;
+      if (m.orderIndex === undefined) m.orderIndex = mIdx + 1;
+    });
+  });
+
+  // Sort sections and their metrics
+  sections.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+  sections.forEach(s => {
+    s.metrics.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+  });
+
+  return sections;
+}
+
+export async function saveDivisionsIndices(orderedDivIds: string[]): Promise<boolean> {
+  if (!hasSpContext()) {
+    const sections = getLocalConfigFromStorage();
+    orderedDivIds.forEach((id, idx) => {
+      const section = sections.find(s => s.id === id || s.title === id);
+      if (section) {
+        section.orderIndex = idx + 1;
+      }
+    });
+    localStorage.setItem('dash_config_mock', JSON.stringify(sections));
+    return true;
+  }
+  try {
+    for (let idx = 0; idx < orderedDivIds.length; idx++) {
+      const id = orderedDivIds[idx];
+      await spListUpdateItem(LIST_DIVISOES, Number(id), { OrderIndex: idx + 1 });
+    }
+    return true;
+  } catch (err) {
+    console.error("Error saving divisions order:", err);
+    return false;
+  }
+}
+
+export async function saveMetricsIndices(divisionId: string, orderedMetricIds: string[]): Promise<boolean> {
+  if (!hasSpContext()) {
+    const sections = getLocalConfigFromStorage();
+    const section = sections.find(s => s.id === divisionId || s.title === divisionId);
+    if (section) {
+      orderedMetricIds.forEach((id, idx) => {
+        const metric = section.metrics.find(m => m.id === id);
+        if (metric) {
+          metric.orderIndex = idx + 1;
+        }
+      });
+      localStorage.setItem('dash_config_mock', JSON.stringify(sections));
+    }
+    return true;
+  }
+  try {
+    for (let idx = 0; idx < orderedMetricIds.length; idx++) {
+      const id = orderedMetricIds[idx];
+      await spListUpdateItem(LIST_CARDS, Number(id), { OrderIndex: idx + 1, DivisionId: Number(divisionId) });
+    }
+    return true;
+  } catch (err) {
+    console.error("Error saving metrics order:", err);
+    return false;
+  }
 }
 
 function getLocalConfig(): Section[] {
@@ -439,4 +543,103 @@ function getLocalConfig(): Section[] {
       ]
     }
   ];
+}
+
+function getLocalUsersFromStorage(): string[] {
+  const saved = localStorage.getItem('dash_users_mock');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return ["arlenloran@gmail.com", "admin@mock.com"];
+    }
+  }
+  const defaultList = ["arlenloran@gmail.com", "admin@mock.com"];
+  localStorage.setItem('dash_users_mock', JSON.stringify(defaultList));
+  return defaultList;
+}
+
+export async function isUserAllowed(email: string): Promise<boolean> {
+  const normalized = email.toLowerCase().trim();
+  if (!normalized) return false;
+
+  if (!hasSpContext()) {
+    const list = getLocalUsersFromStorage();
+    return list.some(e => e.toLowerCase().trim() === normalized);
+  }
+
+  try {
+    const res = await spListGetItems<any>(LIST_USERS, {
+      filter: `Title eq '${normalized}' or Email eq '${normalized}'`,
+      top: 1
+    });
+    if (res.status && res.data.length > 0) {
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error("Error checking user permission:", err);
+    return false;
+  }
+}
+
+export async function fetchAllowedUsers(): Promise<{ id: string; email: string }[]> {
+  if (!hasSpContext()) {
+    const list = getLocalUsersFromStorage();
+    return list.map((email, idx) => ({ id: String(idx), email }));
+  }
+
+  try {
+    const res = await spListGetItems<any>(LIST_USERS);
+    if (!res.status) throw new Error(res.message);
+    return res.data.map((item: any) => ({
+      id: String(item.Id),
+      email: item.Email || item.Title
+    }));
+  } catch (err) {
+    console.error("Error fetching allowed users:", err);
+    return [];
+  }
+}
+
+export async function addAllowedUser(email: string): Promise<boolean> {
+  const normalized = email.toLowerCase().trim();
+  if (!normalized) return false;
+
+  if (!hasSpContext()) {
+    const list = getLocalUsersFromStorage();
+    if (!list.some(e => e.toLowerCase().trim() === normalized)) {
+      list.push(normalized);
+      localStorage.setItem('dash_users_mock', JSON.stringify(list));
+    }
+    return true;
+  }
+
+  const exists = await isUserAllowed(normalized);
+  if (exists) return true;
+
+  const res = await spListAddItem(LIST_USERS, {
+    Title: normalized,
+    Email: normalized
+  });
+  return res.status;
+}
+
+export async function removeAllowedUser(id: string, email?: string): Promise<boolean> {
+  if (!hasSpContext()) {
+    let list = getLocalUsersFromStorage();
+    if (email) {
+      list = list.filter(e => e.toLowerCase().trim() !== email.toLowerCase().trim());
+    } else {
+      const idx = Number(id);
+      if (!isNaN(idx)) {
+        list.splice(idx, 1);
+      }
+    }
+    localStorage.setItem('dash_users_mock', JSON.stringify(list));
+    return true;
+  }
+
+  const res = await spListDeleteItem(LIST_USERS, Number(id));
+  return res.status;
 }

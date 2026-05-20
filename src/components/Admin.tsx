@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Plus, Edit2, Trash2, ChevronRight, Settings, Layout, 
   Activity, Shield, Clock, BookOpen, Database, Save, X,
-  AlertTriangle, Filter, ArrowLeft
+  AlertTriangle, Filter, ArrowLeft, Lock, GripVertical, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Section, Metric } from '../types';
@@ -14,8 +14,15 @@ import {
   deleteDivision, 
   addMetric, 
   updateMetric, 
-  deleteMetric 
+  deleteMetric,
+  isUserAllowed,
+  fetchAllowedUsers,
+  addAllowedUser,
+  removeAllowedUser,
+  saveDivisionsIndices,
+  saveMetricsIndices
 } from '../services/configService';
+import { getCurrentSharePointUserEmail, hasSpContext } from '../services/spService';
 
 export function Admin() {
   const [sections, setSections] = useState<Section[]>([]);
@@ -26,6 +33,117 @@ export function Admin() {
   const [editingMetric, setEditingMetric] = useState<{ metric: Metric, divisionId: string } | null>(null);
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
   const [isMetricModalOpen, setIsMetricModalOpen] = useState(false);
+
+  // Permission settings
+  const [isCheckingAccess, setIsCheckingAccess] = useState(true);
+  const [hasAccess, setHasAccess] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
+  const [allowedUsers, setAllowedUsers] = useState<{ id: string; email: string }[]>([]);
+  const [newAccessEmail, setNewAccessEmail] = useState('');
+  const [isSavingAccess, setIsSavingAccess] = useState(false);
+  const [accessMessage, setAccessMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [draggedSectionIndex, setDraggedSectionIndex] = useState<number | null>(null);
+  const [draggedMetricIndex, setDraggedMetricIndex] = useState<{ sectionId: string, index: number } | null>(null);
+
+  const handleMoveSection = async (fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= sections.length) return;
+    const updated = [...sections];
+    const [removed] = updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, removed);
+    setSections(updated);
+    try {
+      await saveDivisionsIndices(updated.map(s => s.id!));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleMoveMetric = async (sectionId: string, fromIdx: number, toIdx: number) => {
+    const section = sections.find(s => s.id === sectionId);
+    if (!section || toIdx < 0 || toIdx >= section.metrics.length) return;
+    const updatedMetrics = [...section.metrics];
+    const [removed] = updatedMetrics.splice(fromIdx, 1);
+    updatedMetrics.splice(toIdx, 0, removed);
+    
+    const updatedSections = sections.map(s => {
+      if (s.id === sectionId) {
+        return { ...s, metrics: updatedMetrics };
+      }
+      return s;
+    });
+    setSections(updatedSections);
+    try {
+      await saveMetricsIndices(sectionId, updatedMetrics.map(m => m.id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const loadAllowedUsers = async () => {
+    try {
+      const users = await fetchAllowedUsers();
+      setAllowedUsers(users);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAccessModalOpen) {
+      loadAllowedUsers();
+    }
+  }, [isAccessModalOpen]);
+
+  const handleAddAccess = async () => {
+    if (!newAccessEmail.trim() || !newAccessEmail.includes('@')) {
+      setAccessMessage({ type: 'error', text: 'Insira um e-mail válido' });
+      return;
+    }
+    setIsSavingAccess(true);
+    setAccessMessage(null);
+    try {
+      const ok = await addAllowedUser(newAccessEmail);
+      if (ok) {
+        setAccessMessage({ type: 'success', text: 'Acesso concedido com sucesso!' });
+        setNewAccessEmail('');
+        await loadAllowedUsers();
+      } else {
+        setAccessMessage({ type: 'error', text: 'Erro ao conceder acesso' });
+      }
+    } catch (err: any) {
+      setAccessMessage({ type: 'error', text: err?.message || 'Erro ao conceder acesso' });
+    } finally {
+      setIsSavingAccess(false);
+    }
+  };
+
+  const handleRemoveAccess = async (id: string, email: string) => {
+    if (window.confirm(`Deseja realmente remover o acesso de ${email}?`)) {
+      setIsSavingAccess(true);
+      setAccessMessage(null);
+      try {
+        const ok = await removeAllowedUser(id, email);
+        if (ok) {
+          setAccessMessage({ type: 'success', text: 'Acesso removido com sucesso!' });
+          await loadAllowedUsers();
+          
+          const curEmail = getCurrentSharePointUserEmail() || localStorage.getItem('mock_user_email') || 'arlenloran@gmail.com';
+          if (email.toLowerCase().trim() === curEmail.toLowerCase().trim()) {
+            const allowed = await isUserAllowed(curEmail);
+            setHasAccess(allowed);
+          }
+        } else {
+          setAccessMessage({ type: 'error', text: 'Erro ao remover acesso' });
+        }
+      } catch (err: any) {
+        setAccessMessage({ type: 'error', text: err?.message || 'Erro ao remover acesso' });
+      } finally {
+        setIsSavingAccess(false);
+      }
+    }
+  };
 
   // Form states
   const [sectionTitle, setSectionTitle] = useState('');
@@ -38,10 +156,17 @@ export function Admin() {
   });
 
   const loadConfig = async () => {
-    setIsLoading(true);
+    setIsCheckingAccess(true);
     await ensureSharePointConfig();
-    const data = await fetchDashboardConfig();
-    setSections(data);
+    const email = getCurrentSharePointUserEmail() || localStorage.getItem('mock_user_email') || 'arlenloran@gmail.com';
+    setUserEmail(email);
+    const allowed = await isUserAllowed(email);
+    setHasAccess(allowed);
+    if (allowed) {
+      const data = await fetchDashboardConfig();
+      setSections(data);
+    }
+    setIsCheckingAccess(false);
     setIsLoading(false);
   };
 
@@ -109,6 +234,64 @@ export function Admin() {
     setIsMetricModalOpen(true);
   };
 
+  if (isCheckingAccess) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center py-20 gap-4">
+        <Activity className="w-12 h-12 text-slate-400 animate-spin" />
+        <p className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Verificando Permissões...</p>
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8 flex flex-col items-center justify-center">
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white border border-slate-200 p-8 rounded-3xl shadow-xl w-full max-w-md text-center"
+        >
+          <div className="mx-auto w-16 h-16 bg-red-50 text-brand-red rounded-2xl flex items-center justify-center mb-6">
+            <Lock className="w-8 h-8 animate-bounce" />
+          </div>
+          
+          <h1 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">Acesso Restrito</h1>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 mb-6">Painel Administrativo bloqueado</p>
+          
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-left mb-6">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-tight mb-1">E-mail Identificado:</p>
+            <p className="text-xs font-black text-slate-800 break-all">{userEmail || 'Nenhum e-mail identificado'}</p>
+          </div>
+
+          <p className="text-xs text-slate-500 leading-relaxed mb-8">
+            Desculpe, apenas usuários cadastrados na lista de permissões possuem autorização para gerenciar a estrutura das métricas.
+          </p>
+
+          <div className="flex flex-col gap-3">
+            <a href="/" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition-all active:scale-95 shadow-md">
+              <ArrowLeft className="w-4 h-4" /> Voltar ao Dashboard
+            </a>
+            
+            {!hasSpContext() && (
+              <button 
+                onClick={() => {
+                  const val = window.prompt("Simular novo e-mail para teste:", userEmail);
+                  if (val) {
+                    localStorage.setItem('mock_user_email', val.trim());
+                    window.location.reload();
+                  }
+                }}
+                className="w-full py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[9px] hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Simular outro e-mail (modo teste)
+              </button>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8">
       <header className="max-w-6xl mx-auto flex justify-between items-center mb-12">
@@ -121,9 +304,17 @@ export function Admin() {
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Gerenciamento de Estrutura & Métricas</p>
           </div>
         </div>
-        <a href="/" className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">
-          <ArrowLeft className="w-4 h-4" /> Voltar ao Dashboard
-        </a>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setIsAccessModalOpen(true)} 
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all cursor-pointer"
+          >
+            <Shield className="w-4 h-4 text-brand-red animate-pulse" /> Gerenciar Acessos
+          </button>
+          <a href="/" className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">
+            <ArrowLeft className="w-4 h-4" /> Voltar ao Dashboard
+          </a>
+        </div>
       </header>
 
       <main className="max-w-6xl mx-auto space-y-8 pb-32">
@@ -165,18 +356,58 @@ export function Admin() {
           </div>
         ) : (
           <div className="grid gap-6">
-            {sections.map((section) => (
+            {sections.map((section, sIdx) => (
               <motion.div 
                 layout
-                key={section.title}
-                className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                key={section.id || section.title}
+                draggable
+                onDragStart={(e) => {
+                  // Only drag section if we are dragging the handle or general header area
+                  setDraggedSectionIndex(sIdx);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  if (draggedSectionIndex !== null && draggedSectionIndex !== sIdx) {
+                    handleMoveSection(draggedSectionIndex, sIdx);
+                  }
+                  setDraggedSectionIndex(null);
+                }}
+                className={`bg-white border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 ${
+                  draggedSectionIndex === sIdx ? 'opacity-40 border-dashed border-brand-red scale-[0.99]' : 'border-slate-200'
+                }`}
               >
                 <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                   <div className="flex items-center gap-4">
+                    <div 
+                      className="text-slate-400 cursor-grab active:cursor-grabbing hover:text-slate-600 transition-colors p-1" 
+                      title="Arraste para reordenar divisão"
+                    >
+                      <GripVertical className="w-5 h-5" />
+                    </div>
                     <div className="w-2 h-8 bg-brand-red rounded-full" />
                     <h3 className="text-lg font-black uppercase italic tracking-tight">{section.title}</h3>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                    <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white mr-1">
+                      <button 
+                        onClick={() => handleMoveSection(sIdx, sIdx - 1)}
+                        disabled={sIdx === 0}
+                        className="p-1.5 px-2.5 bg-white text-slate-400 hover:text-slate-800 disabled:opacity-30 hover:bg-slate-50 transition-all border-r border-slate-150 cursor-pointer"
+                        title="Mover divisão para cima"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleMoveSection(sIdx, sIdx + 1)}
+                        disabled={sIdx === sections.length - 1}
+                        className="p-1.5 px-2.5 bg-white text-slate-400 hover:text-slate-800 disabled:opacity-30 hover:bg-slate-50 transition-all cursor-pointer"
+                        title="Mover divisão para baixo"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                    </div>
                     <button 
                       onClick={() => { setEditingSection(section); setSectionTitle(section.title); setIsSectionModalOpen(true); }}
                       className="p-2 text-slate-400 hover:text-slate-900 hover:bg-white rounded-lg transition-all"
@@ -207,9 +438,37 @@ export function Admin() {
 
                 <div className="p-6">
                   <div className="grid gap-4">
-                    {section.metrics.map((metric) => (
-                      <div key={metric.id} className="flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-slate-50 rounded-xl border border-slate-100 gap-4 group">
-                        <div className="flex items-center gap-4">
+                    {section.metrics.map((metric, mIdx) => (
+                      <div 
+                        key={metric.id} 
+                        draggable
+                        onDragStart={(e) => {
+                          e.stopPropagation();
+                          setDraggedMetricIndex({ sectionId: section.id!, index: mIdx });
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                        }}
+                        onDrop={(e) => {
+                          e.stopPropagation();
+                          if (draggedMetricIndex !== null && draggedMetricIndex.sectionId === section.id! && draggedMetricIndex.index !== mIdx) {
+                            handleMoveMetric(section.id!, draggedMetricIndex.index, mIdx);
+                          }
+                          setDraggedMetricIndex(null);
+                        }}
+                        className={`flex flex-col md:flex-row justify-between items-start md:items-center p-4 bg-slate-50 rounded-xl border gap-4 group transition-all duration-300 ${
+                          draggedMetricIndex && draggedMetricIndex.sectionId === section.id! && draggedMetricIndex.index === mIdx
+                            ? 'opacity-40 border-dashed border-brand-red scale-[0.99] border-brand-red bg-red-50/5'
+                            : 'border-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-4 w-full md:w-auto">
+                          <div 
+                            className="text-slate-400 cursor-grab active:cursor-grabbing hover:text-slate-600 transition-colors p-1" 
+                            title="Arraste para reordenar card"
+                          >
+                            <GripVertical className="w-4 h-4" />
+                          </div>
                           <div className="p-3 bg-white border border-slate-200 rounded-xl group-hover:border-brand-red transition-colors">
                             <Activity className="w-5 h-5 text-slate-400 group-hover:text-brand-red" />
                           </div>
@@ -221,7 +480,25 @@ export function Admin() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex gap-2 self-end md:self-auto">
+                        <div className="flex gap-2 self-end md:self-auto items-center">
+                          <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white mr-1">
+                            <button 
+                              onClick={() => handleMoveMetric(section.id!, mIdx, mIdx - 1)}
+                              disabled={mIdx === 0}
+                              className="p-1 px-2.5 bg-white text-slate-400 hover:text-slate-800 disabled:opacity-30 hover:bg-slate-50 transition-all border-r border-slate-150 cursor-pointer"
+                              title="Mover card para cima"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={() => handleMoveMetric(section.id!, mIdx, mIdx + 1)}
+                              disabled={mIdx === section.metrics.length - 1}
+                              className="p-1 px-2.5 bg-white text-slate-400 hover:text-slate-800 disabled:opacity-30 hover:bg-slate-50 transition-all cursor-pointer"
+                              title="Mover card para baixo"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           <button 
                             onClick={() => {
                               setMetricForm({
@@ -262,7 +539,7 @@ export function Admin() {
                     ))}
                     <button 
                       onClick={() => section.id && openNewMetricModal(section.id)}
-                      className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group"
+                      className="w-full py-4 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group cursor-pointer"
                     >
                       <Plus className="w-5 h-5 group-hover:scale-125 transition-transform" />
                       <span className="font-black uppercase text-xs tracking-widest">Adicionar Novo Card</span>
@@ -419,6 +696,96 @@ export function Admin() {
                   <Save className={isSaving ? "w-4 h-4 animate-spin" : "w-4 h-4"} /> {isSaving ? 'Salvando...' : 'Salvar Card'}
                 </button>
               </footer>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Gerenciamento de Acessos */}
+      <AnimatePresence>
+        {isAccessModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="rounded-3xl p-8 w-full max-w-lg shadow-2xl bg-white border border-slate-200 text-slate-900 overflow-hidden"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-red-50 text-brand-red">
+                    <Shield className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter">Controle de Acessos</h3>
+                    <p className="text-[9px] font-black uppercase mt-0.5 tracking-wider text-slate-400">Gerenciar e-mails permitidos</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsAccessModalOpen(false)} 
+                  className="p-2 rounded-full transition-colors hover:bg-slate-100 text-slate-400 hover:text-slate-900"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {accessMessage && (
+                <div className={`p-3 rounded-xl text-xs font-bold uppercase tracking-wider mb-4 border ${accessMessage.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-red-50 border-red-100 text-red-600'}`}>
+                  {accessMessage.text}
+                </div>
+              )}
+
+              {/* Form to Add User */}
+              <div className="mb-6">
+                <label className="block text-[9px] font-black uppercase tracking-widest mb-2 text-slate-400">Conceder Novo Acesso (E-mail)</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="email" 
+                    value={newAccessEmail}
+                    onChange={(e) => setNewAccessEmail(e.target.value)}
+                    placeholder="Ex: usuario@empresa.com"
+                    className="flex-grow px-4 py-3 border rounded-xl outline-none transition-all font-bold text-xs bg-slate-50 border-slate-200 text-slate-900 focus:ring-1 focus:ring-slate-900"
+                  />
+                  <button 
+                    onClick={handleAddAccess}
+                    disabled={isSavingAccess}
+                    className="px-5 py-3 bg-brand-red hover:bg-red-650 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable list of active users */}
+              <div>
+                <label className="block text-[9px] font-black uppercase tracking-widest mb-2 text-slate-400">Usuários com Permissão ({allowedUsers.length})</label>
+                <div className="max-h-[200px] overflow-y-auto rounded-2xl border bg-slate-50 border-slate-200">
+                  {allowedUsers.length === 0 ? (
+                    <p className="text-[10px] uppercase font-bold text-center py-8 text-slate-400 tracking-wider">Nenhum e-mail cadastrado</p>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {allowedUsers.map(u => (
+                        <div key={u.id} className="p-3.5 flex justify-between items-center hover:bg-slate-100 transition-colors">
+                          <div className="flex items-center gap-2.5 max-w-[80%]">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                            <span className="font-extrabold text-xs tracking-tight select-all truncate">{u.email}</span>
+                          </div>
+                          {(getCurrentSharePointUserEmail() || 'arlenloran@gmail.com').toLowerCase().trim() !== u.email.toLowerCase().trim() && (
+                            <button 
+                              onClick={() => handleRemoveAccess(u.id, u.email)}
+                              disabled={isSavingAccess}
+                              className="p-1.5 text-slate-400 hover:text-brand-red rounded-lg hover:bg-red-50/10 transition-colors"
+                              title="Remover Permissão"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

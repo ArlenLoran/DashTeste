@@ -3,7 +3,7 @@ import {
   CheckCircle2, XCircle, ChevronLeft, ChevronRight, RefreshCcw, 
   X, Info, Download, BookOpen, ShieldCheck, Search,
   TrendingUp, TrendingDown, Activity, Settings, LayoutGrid,
-  Clock, Bell, Triangle, Sparkles
+  Clock, Bell, Triangle, Sparkles, Fingerprint, Users, Shield, Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -15,7 +15,16 @@ import {
 import type { Section, Metric, MetricHistory } from '../types';
 
 import { postSqlQuery } from '../services/queryService';
-import { ensureSharePointConfig, fetchDashboardConfig, saveMetricData } from '../services/configService';
+import { 
+  ensureSharePointConfig, 
+  fetchDashboardConfig, 
+  saveMetricData,
+  isUserAllowed,
+  fetchAllowedUsers,
+  addAllowedUser,
+  removeAllowedUser
+} from '../services/configService';
+import { getCurrentSharePointUserEmail, hasSpContext } from '../services/spService';
 
 interface MetricCardProps {
   metric: Metric;
@@ -531,6 +540,80 @@ export function Dashboard() {
   const [layoutConfig, setLayoutConfig] = useState<{title: string, width: number}[]>([]);
   const [eventLog, setEventLog] = useState<{ id: string, message: string, time: string, type: 'info' | 'critical' | 'success' }[]>([]);
 
+  // Permissions & Access Management States
+  const [hasAdminAccess, setHasAdminAccess] = useState(false);
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
+  const [allowedUsers, setAllowedUsers] = useState<{ id: string; email: string }[]>([]);
+  const [newAccessEmail, setNewAccessEmail] = useState('');
+  const [isSavingAccess, setIsSavingAccess] = useState(false);
+  const [accessMessage, setAccessMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const loadAllowedUsers = async () => {
+    try {
+      const users = await fetchAllowedUsers();
+      setAllowedUsers(users);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAccessModalOpen) {
+      loadAllowedUsers();
+    }
+  }, [isAccessModalOpen]);
+
+  const handleAddAccess = async () => {
+    if (!newAccessEmail.trim() || !newAccessEmail.includes('@')) {
+      setAccessMessage({ type: 'error', text: 'Insira um e-mail válido' });
+      return;
+    }
+    setIsSavingAccess(true);
+    setAccessMessage(null);
+    try {
+      const ok = await addAllowedUser(newAccessEmail);
+      if (ok) {
+        setAccessMessage({ type: 'success', text: 'Acesso concedido com sucesso!' });
+        setNewAccessEmail('');
+        await loadAllowedUsers();
+        
+        const email = getCurrentSharePointUserEmail() || localStorage.getItem('mock_user_email') || 'arlenloran@gmail.com';
+        const allowed = await isUserAllowed(email);
+        setHasAdminAccess(allowed);
+      } else {
+        setAccessMessage({ type: 'error', text: 'Erro ao conceder acesso' });
+      }
+    } catch (err: any) {
+      setAccessMessage({ type: 'error', text: err?.message || 'Erro ao conceder acesso' });
+    } finally {
+      setIsSavingAccess(false);
+    }
+  };
+
+  const handleRemoveAccess = async (id: string, email: string) => {
+    if (window.confirm(`Deseja realmente remover o acesso de ${email}?`)) {
+      setIsSavingAccess(true);
+      setAccessMessage(null);
+      try {
+        const ok = await removeAllowedUser(id, email);
+        if (ok) {
+          setAccessMessage({ type: 'success', text: 'Acesso removido com sucesso!' });
+          await loadAllowedUsers();
+          
+          const curEmail = getCurrentSharePointUserEmail() || localStorage.getItem('mock_user_email') || 'arlenloran@gmail.com';
+          const allowed = await isUserAllowed(curEmail);
+          setHasAdminAccess(allowed);
+        } else {
+          setAccessMessage({ type: 'error', text: 'Erro ao remover acesso' });
+        }
+      } catch (err: any) {
+        setAccessMessage({ type: 'error', text: err?.message || 'Erro ao remover acesso' });
+      } finally {
+        setIsSavingAccess(false);
+      }
+    }
+  };
+
   useEffect(() => {
     if (layoutConfig.length > 0) {
       localStorage.setItem('dashboard_layout', JSON.stringify(layoutConfig));
@@ -542,6 +625,11 @@ export function Dashboard() {
       await ensureSharePointConfig();
       const config = await fetchDashboardConfig();
       setData(config);
+
+      // Verify if current user is admin
+      const email = getCurrentSharePointUserEmail() || localStorage.getItem('mock_user_email') || 'arlenloran@gmail.com';
+      const allowed = await isUserAllowed(email);
+      setHasAdminAccess(allowed);
       
       const savedLayout = localStorage.getItem('dashboard_layout');
       let currentLayout: {title: string, width: number}[] = [];
@@ -731,9 +819,12 @@ export function Dashboard() {
         continue;
       }
 
-      // Sort indices descending to splice safely
+      // Map indices to their respective items in the correct order first
+      const rowItems = rowIndices.map(idx => remaining[idx]);
+      result.push(...rowItems);
+      
+      // Then remove them in descending index order to avoid index disruption
       rowIndices.sort((a, b) => b - a).forEach(idx => { 
-        result.push(remaining[idx]); 
         remaining.splice(idx, 1); 
       });
     }
@@ -745,14 +836,7 @@ export function Dashboard() {
       <header className={`flex flex-col sm:flex-row justify-between items-center mb-6 px-6 py-6 rounded-2xl transition-all duration-700 gap-6 mx-auto w-full ${isWarRoom ? 'bg-[#0f1125] border border-indigo-900/40 shadow-[0_0_40px_rgba(0,0,0,0.5)] max-w-[1700px]' : 'bg-white shadow-sm border border-slate-200 max-w-[1400px]'}`}>
         <div className="flex items-center gap-4">
           <div className={`p-3 rounded-2xl transition-colors duration-500 relative ${isWarRoom ? 'bg-indigo-950/30' : 'bg-slate-50'}`}><Activity className={`w-8 h-8 transition-colors duration-500 ${isWarRoom ? 'text-brand-red animate-pulse' : 'text-slate-900'}`} />{isWarRoom && <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute inset-0 bg-brand-red/20 rounded-2xl" />}</div>
-          <div><h1 className={`text-2xl font-black italic tracking-tighter uppercase leading-tight transition-colors duration-500 ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>Monitor <span className="text-brand-red font-black">Operational</span></h1><div className="flex items-center gap-2 mt-1"><div className={`w-2 h-2 rounded-full animate-pulse ${isWarRoom ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-emerald-500'}`} /><p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Command Center &bull; Live Stream</p></div></div>
-        </div>
-        <div className="flex items-center gap-3">
-          <a href="/admin" className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all text-xs font-black border ${isWarRoom ? 'bg-indigo-950/20 border-indigo-900/50 text-indigo-300 hover:text-white hover:bg-indigo-900/30' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-            <Settings className="w-4 h-4" /> GERENCIAMENTO
-          </a>
-          <button onClick={() => setIsWarRoom(!isWarRoom)} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 ${isWarRoom ? 'bg-brand-red text-white hover:bg-red-600 shadow-[0_0_20px_rgba(204,0,0,0.4)]' : 'bg-slate-900 text-white hover:bg-slate-800'}`}>{isWarRoom ? 'Sair do Modo War Room' : 'Ativar Modo War Room'}</button>
-          <button onClick={refreshData} disabled={isRefreshing} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all text-xs font-black border ${isWarRoom ? 'bg-indigo-950/20 border-indigo-900/50 text-indigo-300 hover:text-white hover:bg-indigo-900/30' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'} disabled:opacity-50`}><RefreshCcw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />{isRefreshing ? 'SINCRONIZANDO...' : 'SINCRONIZAR'}</button>
+          <div><h1 className={`text-2xl font-black italic tracking-tighter uppercase leading-tight transition-colors duration-500 ${isWarRoom ? 'text-white' : 'text-slate-900'}`}>Monitor <span className="text-brand-red font-black">Operacional</span></h1><div className="flex items-center gap-2 mt-1"><div className={`w-2 h-2 rounded-full animate-pulse ${isWarRoom ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-emerald-500'}`} /><p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isWarRoom ? 'text-indigo-400' : 'text-slate-400'}`}>Controle de divergências operacionais em tempo real</p></div></div>
         </div>
       </header>
 
@@ -828,6 +912,16 @@ export function Dashboard() {
               <div className={`mt-auto pt-6 p-4 rounded-xl border italic text-[10px] font-medium leading-relaxed ${isWarRoom ? 'bg-slate-950/50 border-slate-800 text-slate-500' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>{settingsTab === 'layout' ? "Sincronização inteligente de grid baseada em larguras customizadas." : "Log operacional de mutações detectadas em tempo real via stream."}</div>
             </motion.div></>
         )}</AnimatePresence>
+
+      <button 
+        onClick={() => setIsWarRoom(!isWarRoom)} 
+        className={`fixed bottom-[100px] right-8 z-50 p-4 rounded-2xl shadow-2xl flex items-center gap-3 transition-all active:scale-95 group overflow-hidden ${isWarRoom ? 'bg-brand-red text-white hover:bg-red-600 shadow-[0_10px_30px_rgba(204,0,0,0.5)]' : 'bg-[#0f1125] text-white hover:bg-slate-900 shadow-[0_10px_30px_rgba(0,0,0,0.3)]'}`}
+      >
+        <Activity className={`w-6 h-6 ${isWarRoom ? 'animate-pulse text-white' : 'text-brand-red'}`} />
+        <span className="font-black text-xs uppercase tracking-widest pr-2 border-l border-white/20 pl-3">
+          {isWarRoom ? 'Sair do Modo War Room' : 'Ativar Modo War Room'}
+        </span>
+      </button>
 
       <button onClick={() => setIsSettingsOpen(true)} className={`fixed bottom-8 right-8 z-50 p-4 rounded-2xl shadow-2xl flex items-center gap-3 transition-all active:scale-95 group overflow-hidden ${isWarRoom ? 'bg-brand-red text-white hover:bg-red-600 shadow-[0_10px_30px_rgba(204,0,0,0.5)]' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-[0_10px_30px_rgba(0,0,0,0.3)]'}`}><Settings className="w-6 h-6 group-hover:rotate-180 transition-transform duration-700" /><span className="font-black text-xs uppercase tracking-widest pr-2 border-l border-white/20 pl-3">Ajustar Dashboard</span></button>
       <footer className={`text-center text-[10px] py-10 border-t mt-12 transition-colors duration-500 mx-auto w-full ${isWarRoom ? 'border-indigo-950 text-indigo-900 max-w-[1700px]' : 'border-slate-200 text-slate-400 max-w-[1400px]'}`}>&copy; {new Date().getFullYear()} Monitoring System - Todos os direitos reservados</footer>

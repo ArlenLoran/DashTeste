@@ -1,6 +1,6 @@
 {
-  "name": "Remix: Dashboard de Métricas",
-  "description": "Dashboard interativo para monitoramento de qualidade operacional e validação de saldos.",
+  "name": "Dashboard",
+  "description": "Dashboard interativo para monitoramento divergências operacionais.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

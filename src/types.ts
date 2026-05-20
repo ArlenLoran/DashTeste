@@ -20,10 +20,12 @@ export interface Metric {
   isDynamic?: boolean;
   sqlQuery?: string;
   cachedData?: string;
+  orderIndex?: number;
 }
 
 export interface Section {
   id?: string;
   title: string;
   metrics: Metric[];
+  orderIndex?: number;
 }
