@@ -109,6 +109,49 @@ async function startServer() {
     }
   });
 
+  // API Route to proxy email sending via Power Automate
+  app.post("/api/send-email", async (req, res) => {
+    console.log("Received send-email request:", req.body);
+    try {
+      const { emails, Title, BodyEmail, Attachments } = req.body || {};
+      
+      const EMAIL_URL = process.env.POWER_AUTOMATE_EMAIL_URL || "https://51a805d34213e248a3506f5db8fe28.55.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3e998fbce06445cdae41e91bfa5547de/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=6ujIHRbfYrL4_kZ9ZWcuu_LkL9TZyUWMs-VJes1U-As";
+
+      const response = await fetch(EMAIL_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          emails: emails || "",
+          Title: Title || "Notificação do Painel Operacional",
+          BodyEmail: BodyEmail || "",
+          Attachments: Attachments || []
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Power Automate Email error (${response.status}):`, errorText);
+        return res.status(response.status).json({ error: `Power Automate email error: ${response.status}`, details: errorText });
+      }
+
+      let data = {};
+      const resText = await response.text();
+      if (resText) {
+        try {
+          data = JSON.parse(resText);
+        } catch {
+          data = { message: resText };
+        }
+      }
+      res.json(data);
+    } catch (error: any) {
+      console.error("Email proxy query error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Health check
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });

@@ -3,7 +3,8 @@ import {
   CheckCircle2, XCircle, ChevronLeft, ChevronRight, RefreshCcw, 
   X, Info, Download, BookOpen, ShieldCheck, Search,
   TrendingUp, TrendingDown, Activity, Settings, LayoutGrid,
-  Clock, Bell, Triangle, Sparkles, Fingerprint, Users, Shield, Lock
+  Clock, Bell, Triangle, Sparkles, Fingerprint, Users, Shield, Lock,
+  Volume2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -622,11 +623,12 @@ export function Dashboard() {
     showKpiCritical: true,
     showKpiAccuracy: true,
     showKpiSla: true,
-    audioAlertMode: 'both' as 'none' | 'beep' | 'ts' | 'both',
+    audioAlertMode: 'none' as 'none' | 'beep' | 'ts' | 'both',
+    enableEmailAlerts: false,
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem('dashboard_preferences');
+    const saved = localStorage.getItem('dashboard_preferences_v2');
     if (saved) {
       try {
         setPreferences(prev => ({ ...prev, ...JSON.parse(saved) }));
@@ -638,7 +640,7 @@ export function Dashboard() {
 
   const savePreferences = (updated: typeof preferences) => {
     setPreferences(updated);
-    localStorage.setItem('dashboard_preferences', JSON.stringify(updated));
+    localStorage.setItem('dashboard_preferences_v2', JSON.stringify(updated));
   };
 
   const triggerAlarm = (message: string, alertType: 'warning' | 'critical' | 'success') => {
@@ -650,6 +652,132 @@ export function Dashboard() {
     }
     if (mode === 'ts' || mode === 'both') {
       speakAlertText(message);
+    }
+  };
+
+  const sendDivergenceEmail = async (metricTitle: string, details: any[]) => {
+    if (!preferences.enableEmailAlerts) return;
+    try {
+      console.log(`Iniciando envio de e-mail de alerta para a métrica: ${metricTitle}...`);
+      
+      const users = await fetchAllowedUsers();
+      if (!users || users.length === 0) {
+        console.warn("Nenhum usuário cadastrado na lista de acesso App_Dash_Users. E-mail não será enviado.");
+        return;
+      }
+      
+      const emailListString = users.map(u => u.email).filter(Boolean).join(',');
+      if (!emailListString) {
+        console.warn("Nenhum endereço de e-mail válido encontrado na lista de acessos.");
+        return;
+      }
+
+      // Build modern, stylish HTML body with dark slate design
+      let tableRowsHtml = '';
+      if (details && details.length > 0) {
+        const columns = Object.keys(details[0]).slice(0, 6);
+        
+        const headerHtml = columns.map(c => `
+          <th style="padding: 12px 10px; border-bottom: 2px solid #ef4444; text-align: left; font-size: 11px; text-transform: uppercase; color: #f8fafc; font-weight: 900; letter-spacing: 0.5px;">${c}</th>
+        `).join('');
+        
+        const rowsHtml = details.slice(0, 15).map((row, idx) => {
+          const cells = columns.map(c => {
+            const rawVal = row[c];
+            const val = rawVal === null || rawVal === undefined ? '' : typeof rawVal === 'object' ? JSON.stringify(rawVal) : String(rawVal);
+            return `<td style="padding: 10px; border-bottom: 1px solid #1e293b; font-size: 11px; color: #cbd5e1; font-family: 'JetBrains Mono', monospace;">${val}</td>`;
+          }).join('');
+          const bg = idx % 2 === 0 ? '#0f172a' : '#1e293b';
+          return `<tr style="background-color: ${bg};">${cells}</tr>`;
+        }).join('');
+
+        const truncateWarning = details.length > 15 
+          ? `<tr><td colspan="${columns.length}" style="text-align: center; padding: 12px; color: #f43f5e; font-size: 11px; font-weight: 900; background-color: #881337; text-transform: uppercase; letter-spacing: 0.5px;">Exibindo apenas os 15 primeiros registros de um total de ${details.length} desvios.</td></tr>`
+          : '';
+
+        tableRowsHtml = `
+          <div style="margin-top: 20px; border-radius: 12px; overflow: hidden; border: 1px solid #ef4444; box-shadow: 0 4px 20px rgba(220, 38, 38, 0.15);">
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="background-color: #1e1b4b;">${headerHtml}</tr>
+              </thead>
+              <tbody>${rowsHtml}${truncateWarning}</tbody>
+            </table>
+          </div>
+        `;
+      } else {
+        tableRowsHtml = `<p style="color: #94a3b8; font-style: italic; background-color: #0f172a; padding: 16px; border-radius: 8px; border: 1px dashed #334155;">Nenhum detalhe adicional disponível para esta divergência.</p>`;
+      }
+
+      const bodyHtml = `
+        <div style="font-family: 'Inter', -apple-system, sans-serif; background-color: #020617; color: #f8fafc; padding: 40px 30px; border-radius: 16px; max-width: 650px; margin: 20px auto; border: 1px solid #ef4444;">
+          <table style="width: 100%;">
+            <tr>
+              <td>
+                <span style="background-color: #fca5a5; color: #991b1b; font-size: 9px; font-weight: 900; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1.5px; display: inline-block;">SISTEMA DE MONITORAMENTO</span>
+                <h1 style="color: #ffffff; font-size: 22px; font-weight: 800; margin: 12px 0 4px 0; font-style: italic; text-transform: uppercase; tracking: -0.5px;">MONITOR <span style="color: #ef4444;">OPERACIONAL</span></h1>
+                <p style="color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 20px 0;">Controle de desvios operacionais em tempo real</p>
+              </td>
+              <td style="text-align: right; vertical-align: top;">
+                <span style="color: #ef4444; font-size: 18px; font-weight: bold;">🔴 ATENÇÃO</span>
+              </td>
+            </tr>
+          </table>
+
+          <div style="border-top: 1px solid #334155; padding-top: 24px; margin-top: 10px;">
+            <p style="color: #e2e8f0; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+              Olá, equipe operacional do painel.
+            </p>
+            <p style="color: #cbd5e1; font-size: 13px; line-height: 1.6; margin: 0 0 20px 0;">
+              Foi detectada uma <strong>nova divergência operacional ativa</strong> no módulo de controle. Recomendamos a investigação imediata dos dados abaixo:
+            </p>
+            
+            <div style="background: rgba(220, 38, 38, 0.1); border-left: 4px solid #ef4444; padding: 15px; border-radius: 0 8px 8px 0; margin-bottom: 25px;">
+              <span style="color: #94a3b8; font-size: 9px; font-weight: bold; text-transform: uppercase; tracking: 1px; display: block; margin-bottom: 4px;">MÉTRICA COM DIVERGÊNCIA</span>
+              <span style="color: #ffffff; font-size: 16px; font-weight: 800; font-style: italic; text-transform: uppercase;">${metricTitle}</span>
+              <span style="color: #ef4444; font-size: 11px; font-weight: bold; display: block; margin-top: 6px;">Total de desvios na atualização: ${details.length}</span>
+            </div>
+
+            <h3 style="color: #ffffff; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px 0;">AMOSTRA DA TABELA DE DETALHES</h3>
+            ${tableRowsHtml}
+          </div>
+
+          <div style="margin-top: 35px; text-align: center;">
+            <a href="${window.location.origin}" style="display: inline-block; background-color: #ef4444; color: #ffffff; font-size: 11px; font-weight: 900; padding: 14px 28px; text-decoration: none; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">
+              Acessar Painel de Controle
+            </a>
+          </div>
+
+          <div style="margin-top: 40px; border-top: 1px solid #1e293b; padding-top: 20px; text-align: center; color: #475569; font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px;">
+            Este e-mail foi enviado automaticamente para todos os e-mails listados na permissão de acessos (App_Dash_Users) em ${new Date().toLocaleString('pt-BR')}.
+          </div>
+        </div>
+      `;
+
+      const Title = `[Alerta Operacional] Divergência em: ${metricTitle}`;
+
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          emails: emailListString,
+          Title,
+          BodyEmail: bodyHtml,
+          Attachments: []
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Servidor de e-mail retornou status: ${response.status}`);
+      }
+
+      console.log(`E-mail com tabela enviado com sucesso para: ${emailListString}`);
+      setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `E-mail de desvio enviado à lista para a métrica "${metricTitle}".`, time: new Date().toLocaleTimeString('pt-BR'), type: 'success' as const }, ...prev] as any).slice(0, 50));
+    } catch (error: any) {
+      console.error("Erro ao tentar enviar e-mail via Power Automate:", error);
+      setEventLog(prev => ([{ id: Math.random().toString(36).substr(2, 9), message: `Falha no envio de e-mail (${metricTitle}): ${error.message || error}`, time: new Date().toLocaleTimeString('pt-BR'), type: 'critical' as const }, ...prev] as any).slice(0, 50));
     }
   };
 
@@ -812,6 +940,7 @@ export function Dashboard() {
       const metricsToUpdate: any[] = [];
       const newlyFoundErrors: string[] = [];
       const resolvedErrors: string[] = [];
+      const newlyFoundErrorList: { title: string, data: any[] }[] = [];
       
       setData(current => {
         return current.map(section => {
@@ -825,10 +954,11 @@ export function Dashboard() {
               
               if (isNowError && !wasError) {
                 newlyFoundErrors.push(metric.title);
+                newlyFoundErrorList.push({ title: metric.title, data: Array.isArray(res) ? res : [] });
               } else if (!isNowError && wasError) {
                 resolvedErrors.push(metric.title);
               }
-
+ 
               const updatedHistory = [rowCount, ...(metric.history || [])].slice(0, 10);
               const updatedMetric = {
                 ...metric,
@@ -853,6 +983,10 @@ export function Dashboard() {
       // Trigger notifications if needed
       if (newlyFoundErrors.length > 0) {
         triggerAlarm(`Alerta! Nova divergência detectada na métrica: ${newlyFoundErrors.join(', ')}`, 'critical');
+        // Trigger emails asynchronously for each detected divergence
+        newlyFoundErrorList.forEach(errItem => {
+          sendDivergenceEmail(errItem.title, errItem.data);
+        });
       } else if (resolvedErrors.length > 0) {
         triggerAlarm(`Excelente! Divergência resolvida na métrica: ${resolvedErrors.join(', ')}`, 'success');
       }
@@ -901,6 +1035,7 @@ export function Dashboard() {
       // Trigger notifications if needed
       if (isNowError && !wasError) {
         triggerAlarm(`Alerta! Nova divergência detectada na métrica: ${metric.title}`, 'critical');
+        sendDivergenceEmail(metric.title, Array.isArray(result) ? result : []);
       } else if (!isNowError && wasError) {
         triggerAlarm(`Excelente! Divergência resolvida na métrica: ${metric.title}`, 'success');
       }
@@ -1156,6 +1291,26 @@ export function Dashboard() {
                           }`} />
                         </button>
                       </div>
+
+                      <div className="border-t border-slate-200/20 my-1" />
+
+                      {/* Email alerts config */}
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-tight">Notificações por E-mail</p>
+                          <p className="text-[9px] text-slate-500">Enviar desvios para lista de acessos</p>
+                        </div>
+                        <button
+                          onClick={() => savePreferences({ ...preferences, enableEmailAlerts: !preferences.enableEmailAlerts })}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 ${
+                            preferences.enableEmailAlerts ? 'bg-brand-red' : isWarRoom ? 'bg-slate-800' : 'bg-slate-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
+                            preferences.enableEmailAlerts ? 'translate-x-[22px]' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
                     </div>
 
                     {/* KPI Cards Config */}
@@ -1220,13 +1375,13 @@ export function Dashboard() {
                     </div>
 
                     {/* Audio Config */}
-                    <div className={`p-4 rounded-xl border ${isWarRoom ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'} space-y-3`}>
+                    <div className={`p-4 rounded-xl border ${isWarRoom ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'} space-y-4`}>
                       <div>
                         <h3 className="text-[9px] font-black uppercase tracking-wider text-slate-400">Bips e Alertas de Voz</h3>
                         <p className="text-[8px] text-slate-500">Notificação instantânea para novos desvios</p>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-1.5 pt-1.5">
+                      <div className="grid grid-cols-2 gap-1.5">
                         {[
                           { key: 'none', label: 'Desativado' },
                           { key: 'beep', label: 'Bipes' },
@@ -1237,22 +1392,54 @@ export function Dashboard() {
                             key={opt.key}
                             onClick={() => {
                               savePreferences({ ...preferences, audioAlertMode: opt.key as any });
-                              if (opt.key !== 'none') {
-                                playAlertBeep('success');
-                                speakAlertText("Som de teste!");
-                              }
                             }}
-                            className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all border text-center ${
+                            className={`py-1.5 px-2 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all border text-center cursor-pointer ${
                               preferences.audioAlertMode === opt.key
                                 ? 'bg-brand-red border-brand-red text-white shadow-sm'
                                 : isWarRoom
-                                ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                ? 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
                             }`}
                           >
                             {opt.label}
                           </button>
                         ))}
+                      </div>
+
+                      {/* Test sound board */}
+                      <div className="pt-3 border-t border-slate-200/10 space-y-2">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                          <Volume2 className="w-3.5 h-3.5 text-brand-red" /> Testar Sons do Sistema
+                        </span>
+                        <div className="grid grid-cols-1 gap-1.5">
+                          <button
+                            onClick={() => playAlertBeep('critical')}
+                            className={`w-full text-[9px] font-black uppercase tracking-tight py-1.5 rounded border border-transparent transition-all text-left px-3 flex justify-between items-center cursor-pointer ${
+                              isWarRoom ? 'bg-indigo-950/30 hover:bg-indigo-950/60 text-slate-300 hover:text-white' : 'bg-slate-100/80 hover:bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1">🔊 Alerta de Divergência</span>
+                            <span className="text-brand-red font-black text-[8px]">Crítico</span>
+                          </button>
+                          <button
+                            onClick={() => playAlertBeep('success')}
+                            className={`w-full text-[9px] font-black uppercase tracking-tight py-1.5 rounded border border-transparent transition-all text-left px-3 flex justify-between items-center cursor-pointer ${
+                              isWarRoom ? 'bg-indigo-950/30 hover:bg-indigo-950/60 text-slate-300 hover:text-white' : 'bg-slate-100/80 hover:bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1">🔊 Sucesso / Resolução</span>
+                            <span className="text-emerald-500 font-black text-[8px]">Sucesso</span>
+                          </button>
+                          <button
+                            onClick={() => speakAlertText("Mensagem de teste do auto-falante: Operação de monitor normalizada.")}
+                            className={`w-full text-[9px] font-black uppercase tracking-tight py-1.5 rounded border border-transparent transition-all text-left px-3 flex justify-between items-center cursor-pointer ${
+                              isWarRoom ? 'bg-indigo-950/30 hover:bg-indigo-950/60 text-slate-300 hover:text-white' : 'bg-slate-100/80 hover:bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1.5">🗣️ Sintetizador de Voz</span>
+                            <span className="text-indigo-400 font-black text-[8px]">pt-BR</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
