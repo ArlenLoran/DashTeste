@@ -717,7 +717,7 @@ export function Dashboard() {
         return;
       }
       
-      const emailListString = users.map(u => u.email).filter(Boolean).join(',');
+      const emailListString = users.map(u => u.email).filter(Boolean).join(';');
       if (!emailListString) {
         console.warn("Nenhum endereço de e-mail válido encontrado na lista de acessos.");
         sendingEmailLocks.delete(lockKey);
