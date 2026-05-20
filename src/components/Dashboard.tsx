@@ -388,6 +388,145 @@ const withCleanedEnvironment = async <T,>(actionFn: () => Promise<T>): Promise<T
   }
 };
 
+function copyInputStates(original: HTMLElement, clone: HTMLElement) {
+  const originalInputs = Array.from(original.querySelectorAll('input, select, textarea')) as (HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement)[];
+  const cloneInputs = Array.from(clone.querySelectorAll('input, select, textarea')) as (HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement)[];
+  
+  for (let i = 0; i < originalInputs.length; i++) {
+    const orig = originalInputs[i];
+    const cln = cloneInputs[i];
+    if (!orig || !cln) continue;
+    
+    if (orig.tagName.toLowerCase() === 'input') {
+      const type = (orig as HTMLInputElement).type;
+      if (type === 'checkbox' || type === 'radio') {
+        (cln as HTMLInputElement).checked = (orig as HTMLInputElement).checked;
+      } else {
+        (cln as HTMLInputElement).value = (orig as HTMLInputElement).value;
+      }
+    } else if (orig.tagName.toLowerCase() === 'textarea') {
+      (cln as HTMLTextAreaElement).value = (orig as HTMLTextAreaElement).value;
+    } else if (orig.tagName.toLowerCase() === 'select') {
+      (cln as HTMLSelectElement).selectedIndex = (orig as HTMLSelectElement).selectedIndex;
+    }
+  }
+}
+
+function copyCanvases(original: HTMLElement, clone: HTMLElement) {
+  const originalCanvases = Array.from(original.querySelectorAll('canvas')) as HTMLCanvasElement[];
+  const cloneCanvases = Array.from(clone.querySelectorAll('canvas')) as HTMLCanvasElement[];
+  
+  for (let i = 0; i < originalCanvases.length; i++) {
+    const orig = originalCanvases[i];
+    const cln = cloneCanvases[i];
+    if (!orig || !cln) continue;
+    
+    try {
+      const ctx = cln.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(orig, 0, 0);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+}
+
+function copyAndCleanComputedStyles(original: HTMLElement, clone: HTMLElement) {
+  const originalElements = [original, ...Array.from(original.querySelectorAll('*'))] as HTMLElement[];
+  const cloneElements = [clone, ...Array.from(clone.querySelectorAll('*'))] as HTMLElement[];
+  
+  for (let i = 0; i < originalElements.length; i++) {
+    const origEl = originalElements[i];
+    const cloneEl = cloneElements[i];
+    if (!origEl || !cloneEl) continue;
+    
+    const style = window.getComputedStyle(origEl);
+    
+    const propertiesToCopy = [
+      'color', 'background-color', 'background',
+      'border-color', 'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+      'box-shadow', 'fill', 'stroke', 'outline-color', 'outline',
+      'background-image'
+    ];
+    
+    for (const prop of propertiesToCopy) {
+      try {
+        let val = style.getPropertyValue(prop);
+        if (val) {
+          if (val.includes('oklch') || val.includes('oklab')) {
+            val = replaceOklchOklabValues(val);
+          }
+          cloneEl.style.setProperty(prop, val, 'important');
+        }
+      } catch (e) {
+        // Safe skip
+      }
+    }
+    
+    const inlineStyle = cloneEl.getAttribute('style');
+    if (inlineStyle && (inlineStyle.includes('oklch') || inlineStyle.includes('oklab'))) {
+      cloneEl.setAttribute('style', replaceOklchOklabValues(inlineStyle));
+    }
+  }
+}
+
+interface SafeCloneResult {
+  clone: HTMLElement;
+  cleanup: () => void;
+}
+
+function createHtml2CanvasSafeClone(targetElement: HTMLElement, isWarRoom: boolean): SafeCloneResult {
+  const rect = targetElement.getBoundingClientRect();
+  const width = rect.width || targetElement.scrollWidth || 1200;
+  const height = rect.height || targetElement.scrollHeight || 800;
+  
+  const clone = targetElement.cloneNode(true) as HTMLElement;
+  
+  const wrapper = document.createElement('div');
+  wrapper.id = 'html2canvas-safe-clone-wrapper';
+  wrapper.style.position = 'fixed';
+  wrapper.style.left = '-15000px';
+  wrapper.style.top = '0px';
+  wrapper.style.width = `${width}px`;
+  wrapper.style.height = `${height}px`;
+  wrapper.style.overflow = 'hidden';
+  wrapper.style.zIndex = '-99999';
+  wrapper.style.pointerEvents = 'none';
+  wrapper.style.backgroundColor = isWarRoom ? '#050510' : '#f8fafc';
+  
+  clone.style.width = `${width}px`;
+  clone.style.height = `${height}px`;
+  clone.style.margin = '0px';
+  clone.style.padding = '24px';
+  clone.style.boxSizing = 'border-box';
+  
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+  
+  try {
+    copyInputStates(targetElement, clone);
+    copyCanvases(targetElement, clone);
+  } catch (e) {
+    console.warn("[Teams/Clone] Error copying element states:", e);
+  }
+  
+  try {
+    copyAndCleanComputedStyles(targetElement, clone);
+  } catch (e) {
+    console.warn("[Teams/Clone] Error copying and cleaning styles:", e);
+  }
+  
+  return {
+    clone: wrapper,
+    cleanup: () => {
+      if (wrapper && wrapper.parentNode) {
+        wrapper.parentNode.removeChild(wrapper);
+      }
+    }
+  };
+}
+
 interface MetricCardProps {
   metric: Metric;
   onClick?: (metric: Metric) => void;
@@ -1344,95 +1483,21 @@ export function Dashboard() {
 
       const teamsChatId = await getTeamsChatId();
 
-      // 3. Gerar print do painel usando html2canvas
+      // 3. Gerar print do painel usando html2canvas de forma resiliente
       let base64Image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="; //Fallback de 1x1 png transparente
       const targetElement = document.getElementById('main-dashboard') || document.body;
       
       if (targetElement) {
-        let restoreStyles = () => {};
+        let cleanupScreenshotClone = () => {};
         try {
-          // Remover/Substituir temporariamente cores oklch e oklab das folhas de estilo para evitar que o html2canvas quebre
-          const styleBackups: { element: HTMLStyleElement; originalText: string }[] = [];
-          const linkBackups: { element: HTMLLinkElement; disabled: boolean }[] = [];
-          const tempStyleElements: HTMLStyleElement[] = [];
+          const safeClone = createHtml2CanvasSafeClone(
+            targetElement as HTMLElement,
+            isWarRoom
+          );
+          cleanupScreenshotClone = safeClone.cleanup;
 
-          try {
-            // Limpar tags <style>
-            const styleTags = Array.from(document.querySelectorAll('style'));
-            for (const style of styleTags) {
-              const cssText = style.textContent || '';
-              if (cssText.includes('oklch') || cssText.includes('oklab')) {
-                styleBackups.push({ element: style, originalText: cssText });
-                const cleanedText = cssText
-                  .replace(/oklch\([^)]+\)/gi, 'rgb(71, 85, 105)')
-                  .replace(/oklab\([^)]+\)/gi, 'rgb(71, 85, 105)');
-                style.textContent = cleanedText;
-              }
-            }
-
-            // Limpar arquivos CSS referenciados por <link>
-            const linkSheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]')) as HTMLLinkElement[];
-            for (const link of linkSheets) {
-              const sheet = Array.from(document.styleSheets).find(s => s.ownerNode === link);
-              if (sheet) {
-                let hasUnsupportedColor = false;
-                try {
-                  const rules = sheet.cssRules;
-                  for (let i = 0; i < rules.length; i++) {
-                    const txt = rules[i].cssText;
-                    if (txt.includes('oklch') || txt.includes('oklab')) {
-                      hasUnsupportedColor = true;
-                      break;
-                    }
-                  }
-                } catch (e) {
-                  // Erro de acesso (CORS), presume-se que possa conter oklch se vier do build local
-                  hasUnsupportedColor = true;
-                }
-
-                if (hasUnsupportedColor) {
-                  linkBackups.push({ element: link, disabled: link.disabled });
-                  link.disabled = true;
-
-                  let rulesText = '';
-                  try {
-                    const rules = sheet.cssRules;
-                    rulesText = Array.from(rules).map(r => r.cssText).join('\n');
-                  } catch (e) {
-                    // Sem acesso direto via JS (CORS)
-                  }
-
-                  if (rulesText) {
-                    const cleanedText = rulesText
-                      .replace(/oklch\([^)]+\)/gi, 'rgb(71, 85, 105)')
-                      .replace(/oklab\([^)]+\)/gi, 'rgb(71, 85, 105)');
-                    const tempStyle = document.createElement('style');
-                    tempStyle.textContent = cleanedText;
-                    document.head.appendChild(tempStyle);
-                    tempStyleElements.push(tempStyle);
-                  }
-                }
-              }
-            }
-          } catch (cleanSetupErr) {
-            console.warn("[Teams] Erro na configuração do limpador de estilos oklch:", cleanSetupErr);
-          }
-
-          restoreStyles = () => {
-            for (const backup of styleBackups) {
-              backup.element.textContent = backup.originalText;
-            }
-            for (const backup of linkBackups) {
-              backup.element.disabled = backup.disabled;
-            }
-            for (const temp of tempStyleElements) {
-              temp.remove();
-            }
-          };
-
-          // Executar dentro do ambiente limpo que bloqueia qualquer retorno de oklch/oklab nos estilos calculados
           const canvas = await withCleanedEnvironment(async () => {
-            return await html2canvas(targetElement as HTMLElement, {
+            return await html2canvas(safeClone.clone, {
               useCORS: true,
               allowTaint: true,
               backgroundColor: isWarRoom ? '#050510' : '#f8fafc',
@@ -1452,8 +1517,7 @@ export function Dashboard() {
         } catch (screenshotErr) {
           console.error("[Teams] Erro ao obter print da tela via html2canvas:", screenshotErr);
         } finally {
-          // Reverter as alterações das folhas de estilo para reativar as cores originais da interface imediatamente após o print
-          restoreStyles();
+          cleanupScreenshotClone();
         }
       }
 
