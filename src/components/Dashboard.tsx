@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   CheckCircle2, XCircle, ChevronLeft, ChevronRight, RefreshCcw, 
   X, Info, Download, BookOpen, ShieldCheck, Search,
@@ -1416,17 +1417,31 @@ export function Dashboard() {
       </div>
 
       <AnimatePresence>{selectedMetric && <DivergenceModal metric={selectedMetric} onClose={() => setSelectedMetric(null)} onRefresh={refreshSingleMetric} enableAI={preferences.enableAI} />}</AnimatePresence>
-      <AnimatePresence>{isSettingsOpen && (
-          <><motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSettingsOpen(false)} className="fixed inset-0 bg-slate-950/20 backdrop-blur-[2px] z-[55]" />
-            <motion.div initial={{ opacity: 0, x: 300 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 300 }} className={`fixed right-0 top-0 bottom-0 w-80 z-[60] shadow-2xl p-6 border-l transition-colors duration-500 flex flex-col ${isWarRoom ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
-              <div className="flex justify-between items-center mb-6"><div className="flex items-center gap-3"><Activity className="w-6 h-6 text-brand-red" /><h2 className="text-xl font-black italic uppercase tracking-tighter">Centro de Controle</h2></div><button onClick={() => setIsSettingsOpen(false)} className={`p-2 rounded-full transition-colors ${isWarRoom ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}><X className="w-6 h-6" /></button></div>
-              <div className={`flex p-1 rounded-xl mb-8 transition-colors ${isWarRoom ? 'bg-slate-950' : 'bg-slate-100'}`}>
-                <button onClick={() => setSettingsTab('layout')} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${settingsTab === 'layout' ? 'bg-brand-red text-white shadow-md' : 'text-slate-500 hover:bg-white/10'}`}>Layout</button>
-                <button onClick={() => setSettingsTab('log')} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${settingsTab === 'log' ? 'bg-brand-red text-white shadow-md' : 'text-slate-500 hover:bg-white/10'}`}>Atividade</button>
-                <button onClick={() => setSettingsTab('prefs')} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${settingsTab === 'prefs' ? 'bg-brand-red text-white shadow-md' : 'text-slate-500 hover:bg-white/10'}`}>Definições</button>
-              </div>
-              <div className="flex-grow overflow-y-auto pr-2 scrollbar-hide">
-                {settingsTab === 'layout' ? (
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isSettingsOpen && (
+            <>
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }} 
+                onClick={() => setIsSettingsOpen(false)} 
+                className="fixed inset-0 h-screen w-screen bg-slate-950/25 backdrop-blur-[2px] z-[999]" 
+              />
+              <motion.div 
+                initial={{ opacity: 0, x: 300 }} 
+                animate={{ opacity: 1, x: 0 }} 
+                exit={{ opacity: 0, x: 300 }} 
+                className={`fixed right-0 top-0 bottom-0 h-screen w-80 z-[1000] shadow-2xl p-6 border-l transition-colors duration-500 flex flex-col ${isWarRoom ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+              >
+                <div className="flex justify-between items-center mb-6"><div className="flex items-center gap-3"><Activity className="w-6 h-6 text-brand-red" /><h2 className="text-xl font-black italic uppercase tracking-tighter">Centro de Controle</h2></div><button onClick={() => setIsSettingsOpen(false)} className={`p-2 rounded-full transition-colors ${isWarRoom ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}><X className="w-6 h-6" /></button></div>
+                <div className={`flex p-1 rounded-xl mb-8 transition-colors ${isWarRoom ? 'bg-slate-950' : 'bg-slate-100'}`}>
+                  <button onClick={() => setSettingsTab('layout')} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${settingsTab === 'layout' ? 'bg-brand-red text-white shadow-md' : 'text-slate-500 hover:bg-white/10'}`}>Layout</button>
+                  <button onClick={() => setSettingsTab('log')} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${settingsTab === 'log' ? 'bg-brand-red text-white shadow-md' : 'text-slate-500 hover:bg-white/10'}`}>Atividade</button>
+                  <button onClick={() => setSettingsTab('prefs')} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${settingsTab === 'prefs' ? 'bg-brand-red text-white shadow-md' : 'text-slate-500 hover:bg-white/10'}`}>Definições</button>
+                </div>
+                <div className="flex-grow overflow-y-auto pr-2 scrollbar-hide">
+                  {settingsTab === 'layout' ? (
                   <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                     {layoutConfig.map((config) => (
                       <div key={config.title} className="space-y-4">
@@ -1667,8 +1682,12 @@ export function Dashboard() {
                   ? "Log operacional de mutações detectadas em tempo real via stream."
                   : "Preferências de exibição, recursos de IA analítica e notificações sonoras."}
               </div>
-            </motion.div></>
-        )}</AnimatePresence>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>,
+      document.body
+    )}
 
       <button 
         onClick={() => setIsWarRoom(!isWarRoom)} 
@@ -1686,7 +1705,7 @@ export function Dashboard() {
       >
         <Settings className="w-6 h-6 flex-shrink-0 group-hover:rotate-180 transition-transform duration-700" />
         <span className="font-black text-xs uppercase tracking-widest border-l border-white/20 pl-3 ml-0 group-hover:ml-3 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none max-w-0 group-hover:max-w-xs overflow-hidden">
-          Ajustar Dashboard
+          Ajustar Painel
         </span>
       </button>
       <footer className={`text-center text-[10px] py-10 border-t mt-12 transition-colors duration-500 mx-auto w-full ${isWarRoom ? 'border-indigo-950 text-indigo-900 max-w-[1700px]' : 'border-slate-200 text-slate-400 max-w-[1400px]'}`}>&copy; {new Date().getFullYear()} Monitoring System - Todos os direitos reservados</footer>
