@@ -96,6 +96,298 @@ function speakAlertText(text: string) {
   }
 }
 
+function oklchToRgb(l: number, c: number, h: number, alpha = 1): string {
+  // Convert hue to radians
+  const hRad = (h * Math.PI) / 180;
+  
+  // OKLCH to OKLAB
+  const a = c * Math.cos(hRad);
+  const b = c * Math.sin(hRad);
+  
+  // OKLAB to LMS
+  const l_ = l + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = l - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = l - 0.0894841775 * a - 1.2914855414 * b;
+  
+  const l_LMS = Math.pow(Math.max(0, l_), 3);
+  const m_LMS = Math.pow(Math.max(0, m_), 3);
+  const s_LMS = Math.pow(Math.max(0, s_), 3);
+  
+  // LMS to Linear sRGB
+  const rL = +4.0767416621 * l_LMS - 3.3077115913 * m_LMS + 0.2309699292 * s_LMS;
+  const gL = -1.2684380046 * l_LMS + 2.6097574011 * m_LMS - 0.3413193965 * s_LMS;
+  const bL = -0.0041960863 * l_LMS - 0.7034186147 * m_LMS + 1.7076147010 * s_LMS;
+  
+  // Linear sRGB to sRGB
+  const toSRGB = (val: number) => {
+    return val <= 0.0031308 ? 12.92 * val : 1.055 * Math.pow(val, 1 / 2.4) - 0.055;
+  };
+  
+  const outR = Math.min(255, Math.max(0, Math.round(toSRGB(rL) * 255)));
+  const outG = Math.min(255, Math.max(0, Math.round(toSRGB(gL) * 255)));
+  const outB = Math.min(255, Math.max(0, Math.round(toSRGB(bL) * 255)));
+  
+  if (alpha < 1) {
+    return `rgba(${outR}, ${outG}, ${outB}, ${alpha})`;
+  }
+  return `rgb(${outR}, ${outG}, ${outB})`;
+}
+
+function oklabToRgb(l: number, a: number, b: number, alpha = 1): string {
+  // OKLAB to LMS
+  const l_ = l + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = l - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = l - 0.0894841775 * a - 1.2914855414 * b;
+  
+  const l_LMS = Math.pow(Math.max(0, l_), 3);
+  const m_LMS = Math.pow(Math.max(0, m_), 3);
+  const s_LMS = Math.pow(Math.max(0, s_), 3);
+  
+  // LMS to Linear sRGB
+  const rL = +4.0767416621 * l_LMS - 3.3077115913 * m_LMS + 0.2309699292 * s_LMS;
+  const gL = -1.2684380046 * l_LMS + 2.6097574011 * m_LMS - 0.3413193965 * s_LMS;
+  const bL = -0.0041960863 * l_LMS - 0.7034186147 * m_LMS + 1.7076147010 * s_LMS;
+  
+  // Linear sRGB to sRGB
+  const toSRGB = (val: number) => {
+    return val <= 0.0031308 ? 12.92 * val : 1.055 * Math.pow(val, 1 / 2.4) - 0.055;
+  };
+  
+  const outR = Math.min(255, Math.max(0, Math.round(toSRGB(rL) * 255)));
+  const outG = Math.min(255, Math.max(0, Math.round(toSRGB(gL) * 255)));
+  const outB = Math.min(255, Math.max(0, Math.round(toSRGB(bL) * 255)));
+  
+  if (alpha < 1) {
+    return `rgba(${outR}, ${outG}, ${outB}, ${alpha})`;
+  }
+  return `rgb(${outR}, ${outG}, ${outB})`;
+}
+
+function replaceOklchOklabValues(cssText: string): string {
+  if (!cssText || typeof cssText !== 'string') return cssText;
+  
+  // Match oklch(...) ou oklab(...)
+  const colorRegex = /(oklch|oklab)\(([^)]+)\)/gi;
+  
+  return cssText.replace(colorRegex, (match, type, content) => {
+    try {
+      if (content.includes('var(')) {
+        return 'rgb(71, 85, 105)';
+      }
+      
+      const sanitized = content.replace(/\//g, ' ').replace(/,/g, ' ').trim();
+      const tokens = sanitized.split(/\s+/).filter(Boolean);
+      
+      if (tokens.length < 3) {
+        return 'rgb(71, 85, 105)';
+      }
+      
+      let val1 = parseFloat(tokens[0]);
+      if (tokens[0].endsWith('%')) {
+        val1 = parseFloat(tokens[0]) / 100;
+      }
+      let val2 = parseFloat(tokens[1]);
+      if (tokens[1].endsWith('%')) {
+        val2 = parseFloat(tokens[1]) / 100;
+      }
+      let val3 = parseFloat(tokens[2]);
+      if (tokens[2].endsWith('%')) {
+        val3 = parseFloat(tokens[2]) / 100;
+      }
+      
+      let alpha = 1;
+      if (tokens.length >= 4) {
+        alpha = parseFloat(tokens[3]);
+        if (tokens[3].endsWith('%')) {
+          alpha = parseFloat(tokens[3]) / 100;
+        }
+      }
+      
+      if (isNaN(val1) || isNaN(val2) || isNaN(val3)) {
+        return 'rgb(71, 85, 105)';
+      }
+      
+      if (type.toLowerCase() === 'oklch') {
+        return oklchToRgb(val1, val2, val3, alpha);
+      } else {
+        return oklabToRgb(val1, val2, val3, alpha);
+      }
+    } catch (e) {
+      return 'rgb(71, 85, 105)';
+    }
+  });
+}
+
+const withCleanedEnvironment = async <T,>(actionFn: () => Promise<T>): Promise<T> => {
+  const originalGetComputedStyle = window.getComputedStyle;
+  const originalCreateElement = document.createElement;
+  const originalFetch = window.fetch;
+  const originalXHR = window.XMLHttpRequest;
+  
+  const originalProtoGetPropertyValue = CSSStyleDeclaration.prototype.getPropertyValue;
+  
+  // 1. Intercept CSSStyleDeclaration.prototype.getPropertyValue
+  CSSStyleDeclaration.prototype.getPropertyValue = function(property: string) {
+    const val = originalProtoGetPropertyValue.call(this, property);
+    if (val && (val.includes('oklch') || val.includes('oklab'))) {
+      return replaceOklchOklabValues(val);
+    }
+    return val;
+  };
+
+  // 1a. Intercept all properties with getters on standard CSSStyleDeclaration prototype
+  const descriptors = Object.getOwnPropertyDescriptors(CSSStyleDeclaration.prototype);
+  const restoredDescriptors: Record<string, PropertyDescriptor> = {};
+
+  for (const key of Object.keys(descriptors)) {
+    const desc = descriptors[key];
+    if (desc && desc.get && typeof desc.get === 'function') {
+      restoredDescriptors[key] = desc;
+      try {
+        Object.defineProperty(CSSStyleDeclaration.prototype, key, {
+          get() {
+            const val = desc.get!.call(this);
+            if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab'))) {
+              return replaceOklchOklabValues(val);
+            }
+            return val;
+          },
+          configurable: true,
+          enumerable: desc.enumerable
+        });
+      } catch (e) {
+        // Can't redefine some properties
+      }
+    }
+  }
+  
+  // Helper to wrap getComputedStyle on a given window
+  const wrapWinGetComputedStyle = (win: any) => {
+    const orig = win.getComputedStyle;
+    win.getComputedStyle = function(el: Element, pseudo?: string) {
+      const style = orig.call(win, el, pseudo);
+      return new Proxy(style, {
+        get(target, prop) {
+          if (prop === 'getPropertyValue') {
+            return function(name: string) {
+              const val = target.getPropertyValue(name);
+              if (val && (val.includes('oklch') || val.includes('oklab'))) {
+                return replaceOklchOklabValues(val);
+              }
+              return val;
+            };
+          }
+          const val = Reflect.get(target, prop);
+          if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab'))) {
+            return replaceOklchOklabValues(val);
+          }
+          if (typeof val === 'function') {
+            return val.bind(target);
+          }
+          return val;
+        }
+      });
+    };
+  };
+
+  // 2. Intercept getComputedStyle on the main window
+  wrapWinGetComputedStyle(window);
+
+  // 3. Intercept iframe creation to inject our wrap into iframe windows
+  document.createElement = function(tagName: string, options?: ElementCreationOptions) {
+    const el = originalCreateElement.call(document, tagName, options);
+    if (tagName.toLowerCase() === 'iframe') {
+      Object.defineProperty(el, 'contentWindow', {
+        get() {
+          const iframeWin = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow')?.get?.call(this);
+          if (iframeWin && !iframeWin.__getComputedStyleOverridden__) {
+            iframeWin.__getComputedStyleOverridden__ = true;
+            wrapWinGetComputedStyle(iframeWin);
+            try {
+              if (iframeWin.CSSStyleDeclaration) {
+                const innerProto = iframeWin.CSSStyleDeclaration.prototype;
+                const innerOrigGetProp = innerProto.getPropertyValue;
+                innerProto.getPropertyValue = function(propName: string) {
+                  const val = innerOrigGetProp.call(this, propName);
+                  if (val && (val.includes('oklch') || val.includes('oklab'))) {
+                    return replaceOklchOklabValues(val);
+                  }
+                  return val;
+                };
+              }
+            } catch (e) {}
+          }
+          return iframeWin;
+        },
+        configurable: true
+      });
+    }
+    return el;
+  } as any;
+
+  // 4. Intercept fetch to clean any loaded CSS files
+  window.fetch = async function(input: RequestInfo | URL, init?: RequestInit) {
+    const response = await originalFetch.call(window, input, init);
+    const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : '');
+    if (url.includes('.css') || (init && init.headers && String((init.headers as any)['Accept'] || '').includes('text/css'))) {
+      try {
+        const text = await response.text();
+        const cleanedText = replaceOklchOklabValues(text);
+        return new Response(cleanedText, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers
+        });
+      } catch (err) {
+        // Fallback to original
+      }
+    }
+    return response;
+  };
+
+  // 5. Intercept XMLHttpRequest to clean loaded CSS
+  window.XMLHttpRequest = function() {
+    const xhr = new originalXHR();
+    const originalOpen = xhr.open;
+    let isCss = false;
+    xhr.open = function(method: string, url: string | URL, ...args: any[]) {
+      if (typeof url === 'string' && url.includes('.css')) {
+        isCss = true;
+      }
+      return originalOpen.call(xhr, method, url, ...args);
+    } as any;
+
+    Object.defineProperty(xhr, 'responseText', {
+      get() {
+        const raw = xhr.response;
+        if (isCss && typeof raw === 'string') {
+          return replaceOklchOklabValues(raw);
+        }
+        return raw;
+      },
+      configurable: true
+    });
+    return xhr;
+  } as any;
+
+  try {
+    return await actionFn();
+  } finally {
+    // Restore everything perfectly!
+    window.getComputedStyle = originalGetComputedStyle;
+    document.createElement = originalCreateElement;
+    window.fetch = originalFetch;
+    window.XMLHttpRequest = originalXHR;
+    CSSStyleDeclaration.prototype.getPropertyValue = originalProtoGetPropertyValue;
+    
+    for (const key of Object.keys(restoredDescriptors)) {
+      try {
+        Object.defineProperty(CSSStyleDeclaration.prototype, key, restoredDescriptors[key]);
+      } catch (e) {}
+    }
+  }
+};
+
 interface MetricCardProps {
   metric: Metric;
   onClick?: (metric: Metric) => void;
@@ -1138,17 +1430,21 @@ export function Dashboard() {
             }
           };
 
-          const canvas = await html2canvas(targetElement as HTMLElement, {
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: isWarRoom ? '#050510' : '#f8fafc',
-            scale: 0.85, // Escala ligeiramente otimizada para manter tamanho do payload leve
-            logging: false,
-            ignoreElements: (element) => {
-              // Ignorar botões do cabeçalho e modais flutuantes se houver
-              return element.classList?.contains('modal-excluir') || element.id === 'header-teams-config';
-            }
+          // Executar dentro do ambiente limpo que bloqueia qualquer retorno de oklch/oklab nos estilos calculados
+          const canvas = await withCleanedEnvironment(async () => {
+            return await html2canvas(targetElement as HTMLElement, {
+              useCORS: true,
+              allowTaint: true,
+              backgroundColor: isWarRoom ? '#050510' : '#f8fafc',
+              scale: 0.85, // Escala ligeiramente otimizada para manter tamanho do payload leve
+              logging: false,
+              ignoreElements: (element) => {
+                // Ignorar botões do cabeçalho e modais flutuantes se houver
+                return element.classList?.contains('modal-excluir') || element.id === 'header-teams-config';
+              }
+            });
           });
+
           const imgData = canvas.toDataURL('image/png');
           if (imgData && imgData.includes('base64,')) {
             base64Image = imgData.split('base64,')[1];
