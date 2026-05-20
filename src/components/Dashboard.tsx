@@ -1057,7 +1057,87 @@ export function Dashboard() {
       const targetElement = document.getElementById('main-dashboard') || document.body;
       
       if (targetElement) {
+        let restoreStyles = () => {};
         try {
+          // Remover/Substituir temporariamente cores oklch e oklab das folhas de estilo para evitar que o html2canvas quebre
+          const styleBackups: { element: HTMLStyleElement; originalText: string }[] = [];
+          const linkBackups: { element: HTMLLinkElement; disabled: boolean }[] = [];
+          const tempStyleElements: HTMLStyleElement[] = [];
+
+          try {
+            // Limpar tags <style>
+            const styleTags = Array.from(document.querySelectorAll('style'));
+            for (const style of styleTags) {
+              const cssText = style.textContent || '';
+              if (cssText.includes('oklch') || cssText.includes('oklab')) {
+                styleBackups.push({ element: style, originalText: cssText });
+                const cleanedText = cssText
+                  .replace(/oklch\([^)]+\)/gi, 'rgb(71, 85, 105)')
+                  .replace(/oklab\([^)]+\)/gi, 'rgb(71, 85, 105)');
+                style.textContent = cleanedText;
+              }
+            }
+
+            // Limpar arquivos CSS referenciados por <link>
+            const linkSheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]')) as HTMLLinkElement[];
+            for (const link of linkSheets) {
+              const sheet = Array.from(document.styleSheets).find(s => s.ownerNode === link);
+              if (sheet) {
+                let hasUnsupportedColor = false;
+                try {
+                  const rules = sheet.cssRules;
+                  for (let i = 0; i < rules.length; i++) {
+                    const txt = rules[i].cssText;
+                    if (txt.includes('oklch') || txt.includes('oklab')) {
+                      hasUnsupportedColor = true;
+                      break;
+                    }
+                  }
+                } catch (e) {
+                  // Erro de acesso (CORS), presume-se que possa conter oklch se vier do build local
+                  hasUnsupportedColor = true;
+                }
+
+                if (hasUnsupportedColor) {
+                  linkBackups.push({ element: link, disabled: link.disabled });
+                  link.disabled = true;
+
+                  let rulesText = '';
+                  try {
+                    const rules = sheet.cssRules;
+                    rulesText = Array.from(rules).map(r => r.cssText).join('\n');
+                  } catch (e) {
+                    // Sem acesso direto via JS (CORS)
+                  }
+
+                  if (rulesText) {
+                    const cleanedText = rulesText
+                      .replace(/oklch\([^)]+\)/gi, 'rgb(71, 85, 105)')
+                      .replace(/oklab\([^)]+\)/gi, 'rgb(71, 85, 105)');
+                    const tempStyle = document.createElement('style');
+                    tempStyle.textContent = cleanedText;
+                    document.head.appendChild(tempStyle);
+                    tempStyleElements.push(tempStyle);
+                  }
+                }
+              }
+            }
+          } catch (cleanSetupErr) {
+            console.warn("[Teams] Erro na configuração do limpador de estilos oklch:", cleanSetupErr);
+          }
+
+          restoreStyles = () => {
+            for (const backup of styleBackups) {
+              backup.element.textContent = backup.originalText;
+            }
+            for (const backup of linkBackups) {
+              backup.element.disabled = backup.disabled;
+            }
+            for (const temp of tempStyleElements) {
+              temp.remove();
+            }
+          };
+
           const canvas = await html2canvas(targetElement as HTMLElement, {
             useCORS: true,
             allowTaint: true,
@@ -1075,6 +1155,9 @@ export function Dashboard() {
           }
         } catch (screenshotErr) {
           console.error("[Teams] Erro ao obter print da tela via html2canvas:", screenshotErr);
+        } finally {
+          // Reverter as alterações das folhas de estilo para reativar as cores originais da interface imediatamente após o print
+          restoreStyles();
         }
       }
 
