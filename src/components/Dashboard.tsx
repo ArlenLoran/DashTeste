@@ -131,13 +131,14 @@ function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, o
   const isRefreshingRef = useRef(false);
 
   useEffect(() => {
-    if (!metric || !metric.lastUpdateAt || !metric.refreshInterval || !onRefresh) return;
+    if (!metric || !metric.refreshInterval || !onRefresh) return;
     
     isRefreshingRef.current = false;
 
     const calculate = () => {
+      if (!metric.lastUpdateAt) return 0;
       const now = new Date();
-      const last = new Date(metric.lastUpdateAt!);
+      const last = new Date(metric.lastUpdateAt);
       if (isNaN(last.getTime())) return 0;
       const next = new Date(last.getTime() + metric.refreshInterval! * 60000);
       const diff = Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
@@ -168,7 +169,7 @@ function Countdown({ metric, onRefresh, hideUI, className }: { metric: Metric, o
     return () => {
       clearInterval(timer);
     };
-  }, [metric.lastUpdateAt, metric.refreshInterval, metric.id]);
+  }, [metric.lastUpdateAt, metric.refreshInterval, metric.id, onRefresh]);
 
   if (hideUI) return null;
   if (timeLeft === null || !metric.refreshInterval) return null;
@@ -861,12 +862,6 @@ export function Dashboard() {
   };
 
   const fetchAllData = () => fetchAllDataInternal(data);
-
-  useEffect(() => { 
-    if (data.length > 0 && !isRefreshing) {
-      fetchAllData();
-    } 
-  }, [data.length]);
 
   const refreshSingleMetric = async (metric: Metric) => {
     if (!metric.sqlQuery || isRefreshing) return;
