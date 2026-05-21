@@ -26,7 +26,10 @@ import {
   fetchAllowedUsers,
   addAllowedUser,
   removeAllowedUser,
-  getTeamsChatId
+  getTeamsChatId,
+  getEmailAlertsEnabled,
+  getTeamsAlertsEnabled,
+  fetchAlertEmails
 } from '../services/configService';
 import { getCurrentSharePointUserEmail, hasSpContext } from '../services/spService';
 
@@ -1069,15 +1072,20 @@ export function Dashboard() {
     showKpiAccuracy: true,
     showKpiSla: true,
     audioAlertMode: 'none' as 'none' | 'beep' | 'ts' | 'both',
-    enableEmailAlerts: false,
-    enableTeamsAlerts: false,
   });
+
+  const [globalEmailAlertsEnabled, setGlobalEmailAlertsEnabled] = useState(false);
+  const [globalTeamsAlertsEnabled, setGlobalTeamsAlertsEnabled] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('dashboard_preferences_v2');
     if (saved) {
       try {
-        setPreferences(prev => ({ ...prev, ...JSON.parse(saved) }));
+        const parsed = JSON.parse(saved);
+        // Exclude legacy keys if they were stored in local storage
+        delete parsed.enableEmailAlerts;
+        delete parsed.enableTeamsAlerts;
+        setPreferences(prev => ({ ...prev, ...parsed }));
       } catch (e) {
         console.error("Error loading dashboard preferences:", e);
       }
@@ -1102,7 +1110,7 @@ export function Dashboard() {
   };
 
   const sendDivergenceEmail = async (metricTitle: string, details: any[]) => {
-    if (!preferences.enableEmailAlerts) return;
+    if (!globalEmailAlertsEnabled) return;
     const currentCount = details ? details.length : 0;
     const lockKey = `${metricTitle}_${currentCount}`;
 
@@ -1144,14 +1152,14 @@ export function Dashboard() {
       };
       localStorage.setItem(sentStorageKey, JSON.stringify(sentAlerts));
       
-      const users = await fetchAllowedUsers();
-      if (!users || users.length === 0) {
-        console.warn("Nenhum usuário cadastrado na lista de acesso App_Dash_Users. E-mail não será enviado.");
+      const alertRecipients = await fetchAlertEmails();
+      if (!alertRecipients || alertRecipients.length === 0) {
+        console.warn("Nenhum e-mail cadastrado na lista de alertas App_Dash_Emails. E-mail não será enviado.");
         sendingEmailLocks.delete(lockKey);
         return;
       }
       
-      const emailListString = users.map(u => u.email).filter(Boolean).join(';');
+      const emailListString = alertRecipients.map(u => u.email).filter(Boolean).join(';');
       if (!emailListString) {
         console.warn("Nenhum endereço de e-mail válido encontrado na lista de acessos.");
         sendingEmailLocks.delete(lockKey);
@@ -1434,7 +1442,7 @@ export function Dashboard() {
   const sendingTeamsLocks = new Set<string>();
 
   const sendTeamsNotification = async (metricTitle: string, details: any[]) => {
-    if (!preferences.enableTeamsAlerts) return;
+    if (!globalTeamsAlertsEnabled) return;
     const currentCount = details ? details.length : 0;
     const lockKey = `${metricTitle}_${currentCount}`;
 
@@ -1734,6 +1742,15 @@ export function Dashboard() {
       }
       
       setLayoutConfig(currentLayout);
+
+      try {
+        const emailE = await getEmailAlertsEnabled();
+        setGlobalEmailAlertsEnabled(emailE);
+        const teamsE = await getTeamsAlertsEnabled();
+        setGlobalTeamsAlertsEnabled(teamsE);
+      } catch (err) {
+        console.error("Error loading notification configs on init:", err);
+      }
     };
     initApp();
   }, []);
@@ -1754,6 +1771,15 @@ export function Dashboard() {
         });
         return newConfigs;
       });
+
+      try {
+        const emailE = await getEmailAlertsEnabled();
+        setGlobalEmailAlertsEnabled(emailE);
+        const teamsE = await getTeamsAlertsEnabled();
+        setGlobalTeamsAlertsEnabled(teamsE);
+      } catch (err) {
+        console.error("Error reloading notification configs on refresh:", err);
+      }
 
       await fetchAllDataInternal(config);
     } catch (err) {
@@ -2146,46 +2172,6 @@ export function Dashboard() {
                         >
                           <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
                             preferences.showHeader ? 'translate-x-[22px]' : 'translate-x-1'
-                          }`} />
-                        </button>
-                      </div>
-
-                      <div className="border-t border-slate-200/20 my-1" />
-
-                      {/* Email alerts config */}
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-tight">Notificações por E-mail</p>
-                          <p className="text-[9px] text-slate-500">Enviar desvios para lista de acessos</p>
-                        </div>
-                        <button
-                          onClick={() => savePreferences({ ...preferences, enableEmailAlerts: !preferences.enableEmailAlerts })}
-                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 ${
-                            preferences.enableEmailAlerts ? 'bg-brand-red' : isWarRoom ? 'bg-slate-800' : 'bg-slate-200'
-                          }`}
-                        >
-                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
-                            preferences.enableEmailAlerts ? 'translate-x-[22px]' : 'translate-x-1'
-                          }`} />
-                        </button>
-                      </div>
-
-                      <div className="border-t border-slate-200/20 my-1" />
-
-                      {/* Teams alerts config */}
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-tight">Notificações via Teams</p>
-                          <p className="text-[9px] text-slate-500">Enviar desvio e print do painel para o Teams</p>
-                        </div>
-                        <button
-                          onClick={() => savePreferences({ ...preferences, enableTeamsAlerts: !preferences.enableTeamsAlerts })}
-                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 ${
-                            preferences.enableTeamsAlerts ? 'bg-brand-red' : isWarRoom ? 'bg-[#1f4e79]' : 'bg-slate-200'
-                          }`}
-                        >
-                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-300 ${
-                            preferences.enableTeamsAlerts ? 'translate-x-[22px]' : 'translate-x-1'
                           }`} />
                         </button>
                       </div>

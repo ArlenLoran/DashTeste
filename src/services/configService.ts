@@ -19,6 +19,7 @@ const LIST_CARDS = "App_Dash_Cards";
 const LIST_RULES = "App_Dash_Regras";
 export const LIST_USERS = "App_Dash_Users";
 export const LIST_CONFIGS = "App_Dash_Configs";
+export const LIST_EMAILS = "App_Dash_Emails";
 
 export async function ensureSharePointConfig() {
   if (!hasSpContext()) return;
@@ -65,7 +66,15 @@ export async function ensureSharePointConfig() {
     // Always ensure its columns
     await spListEnsureTextField(LIST_USERS, "Email");
 
-    // 5. Ensure Configs List exists
+    // 5. Ensure Emails List exists
+    if (!(await spListExists(LIST_EMAILS))) {
+      console.log(`Creating list ${LIST_EMAILS}...`);
+      await spCreateList(LIST_EMAILS);
+    }
+    // Always ensure its columns
+    await spListEnsureTextField(LIST_EMAILS, "Email");
+
+    // 6. Ensure Configs List exists
     if (!(await spListExists(LIST_CONFIGS))) {
       console.log(`Creating list ${LIST_CONFIGS}...`);
       await spCreateList(LIST_CONFIGS);
@@ -82,6 +91,41 @@ export async function ensureSharePointConfig() {
       }
     } catch (err) {
       console.error("Error checking or seeding TeamsChatId config:", err);
+    }
+
+    try {
+      const emailAlertsConfig = await spListGetItems<any>(LIST_CONFIGS, { filter: "Title eq 'EmailAlertsEnabled'", top: 1 });
+      if (emailAlertsConfig.status && emailAlertsConfig.data.length === 0) {
+        console.log("Seeding EmailAlertsEnabled...");
+        await spListAddItem(LIST_CONFIGS, { Title: "EmailAlertsEnabled", ConfigValue: "false" });
+      }
+    } catch (err) {
+      console.error("Error seeding EmailAlertsEnabled:", err);
+    }
+
+    try {
+      const teamsAlertsConfig = await spListGetItems<any>(LIST_CONFIGS, { filter: "Title eq 'TeamsAlertsEnabled'", top: 1 });
+      if (teamsAlertsConfig.status && teamsAlertsConfig.data.length === 0) {
+        console.log("Seeding TeamsAlertsEnabled...");
+        await spListAddItem(LIST_CONFIGS, { Title: "TeamsAlertsEnabled", ConfigValue: "false" });
+      }
+    } catch (err) {
+      console.error("Error seeding TeamsAlertsEnabled:", err);
+    }
+
+    // Seed alert email list if empty
+    try {
+      const emailListItems = await spListGetItems(LIST_EMAILS, { top: 1 });
+      if (emailListItems.status && emailListItems.data.length === 0) {
+        console.log("Seeding App_Dash_Emails with initial alerts email...");
+        await spListAddItem(LIST_EMAILS, { Title: "arlenloran@gmail.com", Email: "arlenloran@gmail.com" });
+        const currentEmail = getCurrentSharePointUserEmail();
+        if (currentEmail && currentEmail.toLowerCase() !== "arlenloran@gmail.com") {
+          await spListAddItem(LIST_EMAILS, { Title: currentEmail, Email: currentEmail });
+        }
+      }
+    } catch (err) {
+      console.error("Error seeding emails list:", err);
     }
 
     // Now check if each list is empty and seed data appropriately
@@ -754,6 +798,183 @@ export async function saveTeamsChatId(chatId: string): Promise<boolean> {
     }
   } catch (err) {
     console.error("Error saving teams chat ID:", err);
+    return false;
+  }
+}
+
+export async function getEmailAlertsEnabled(): Promise<boolean> {
+  if (!hasSpContext()) {
+    return localStorage.getItem('email_alerts_enabled_mock') === 'true';
+  }
+  try {
+    const res = await spListGetItems<any>(LIST_CONFIGS, {
+      filter: "Title eq 'EmailAlertsEnabled'",
+      top: 1
+    });
+    if (res.status && res.data.length > 0) {
+      return res.data[0].ConfigValue === 'true';
+    }
+    return false;
+  } catch (err) {
+    console.error("Error fetching EmailAlertsEnabled:", err);
+    return false;
+  }
+}
+
+export async function saveEmailAlertsEnabled(enabled: boolean): Promise<boolean> {
+  const value = enabled ? 'true' : 'false';
+  if (!hasSpContext()) {
+    localStorage.setItem('email_alerts_enabled_mock', value);
+    return true;
+  }
+  try {
+    const res = await spListGetItems<any>(LIST_CONFIGS, {
+      filter: "Title eq 'EmailAlertsEnabled'",
+      top: 1
+    });
+    if (res.status && res.data.length > 0) {
+      const id = res.data[0].Id;
+      const upRes = await spListUpdateItem(LIST_CONFIGS, id, { ConfigValue: value });
+      return upRes.status;
+    } else {
+      const adRes = await spListAddItem(LIST_CONFIGS, { Title: "EmailAlertsEnabled", ConfigValue: value });
+      return adRes.status;
+    }
+  } catch (err) {
+    console.error("Error saving EmailAlertsEnabled:", err);
+    return false;
+  }
+}
+
+export async function getTeamsAlertsEnabled(): Promise<boolean> {
+  if (!hasSpContext()) {
+    return localStorage.getItem('teams_alerts_enabled_mock') === 'true';
+  }
+  try {
+    const res = await spListGetItems<any>(LIST_CONFIGS, {
+      filter: "Title eq 'TeamsAlertsEnabled'",
+      top: 1
+    });
+    if (res.status && res.data.length > 0) {
+      return res.data[0].ConfigValue === 'true';
+    }
+    return false;
+  } catch (err) {
+    console.error("Error fetching TeamsAlertsEnabled:", err);
+    return false;
+  }
+}
+
+export async function saveTeamsAlertsEnabled(enabled: boolean): Promise<boolean> {
+  const value = enabled ? 'true' : 'false';
+  if (!hasSpContext()) {
+    localStorage.setItem('teams_alerts_enabled_mock', value);
+    return true;
+  }
+  try {
+    const res = await spListGetItems<any>(LIST_CONFIGS, {
+      filter: "Title eq 'TeamsAlertsEnabled'",
+      top: 1
+    });
+    if (res.status && res.data.length > 0) {
+      const id = res.data[0].Id;
+      const upRes = await spListUpdateItem(LIST_CONFIGS, id, { ConfigValue: value });
+      return upRes.status;
+    } else {
+      const adRes = await spListAddItem(LIST_CONFIGS, { Title: "TeamsAlertsEnabled", ConfigValue: value });
+      return adRes.status;
+    }
+  } catch (err) {
+    console.error("Error saving TeamsAlertsEnabled:", err);
+    return false;
+  }
+}
+
+function getLocalEmailsFromStorage(): string[] {
+  const saved = localStorage.getItem('dash_emails_mock');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return ["arlenloran@gmail.com"];
+    }
+  }
+  const defaultList = ["arlenloran@gmail.com"];
+  localStorage.setItem('dash_emails_mock', JSON.stringify(defaultList));
+  return defaultList;
+}
+
+export async function fetchAlertEmails(): Promise<{ id: string; email: string }[]> {
+  if (!hasSpContext()) {
+    const list = getLocalEmailsFromStorage();
+    return list.map((email, idx) => ({ id: String(idx), email }));
+  }
+
+  try {
+    const res = await spListGetItems<any>(LIST_EMAILS);
+    if (!res.status) throw new Error(res.message);
+    return res.data.map((item: any) => ({
+      id: String(item.Id),
+      email: item.Email || item.Title
+    }));
+  } catch (err) {
+    console.error("Error fetching alert emails:", err);
+    return [];
+  }
+}
+
+export async function addAlertEmail(email: string): Promise<boolean> {
+  const normalized = email.toLowerCase().trim();
+  if (!normalized) return false;
+
+  if (!hasSpContext()) {
+    const list = getLocalEmailsFromStorage();
+    if (!list.some(e => e.toLowerCase().trim() === normalized)) {
+      list.push(normalized);
+      localStorage.setItem('dash_emails_mock', JSON.stringify(list));
+    }
+    return true;
+  }
+
+  try {
+    const existing = await spListGetItems<any>(LIST_EMAILS, {
+      filter: `Title eq '${normalized}' or Email eq '${normalized}'`,
+      top: 1
+    });
+    if (existing.status && existing.data.length > 0) {
+      return true;
+    }
+    const res = await spListAddItem(LIST_EMAILS, {
+      Title: normalized,
+      Email: normalized
+    });
+    return res.status;
+  } catch (err) {
+    console.error("Error adding alert email:", err);
+    return false;
+  }
+}
+
+export async function removeAlertEmail(id: string, email?: string): Promise<boolean> {
+  if (!hasSpContext()) {
+    let list = getLocalEmailsFromStorage();
+    if (email) {
+      list = list.filter(e => e.toLowerCase().trim() !== email.toLowerCase().trim());
+    } else {
+      const idx = Number(id);
+      if (!isNaN(idx)) {
+        list.splice(idx, 1);
+      }
+    }
+    localStorage.setItem('dash_emails_mock', JSON.stringify(list));
+    return true;
+  }
+
+  try {
+    const res = await spListDeleteItem(LIST_EMAILS, Number(id));
+    return res.status;
+  } catch (err) {
+    console.error("Error removing alert email:", err);
     return false;
   }
 }

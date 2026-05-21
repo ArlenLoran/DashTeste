@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Plus, Edit2, Trash2, ChevronRight, Settings, Layout, 
   Activity, Shield, Clock, BookOpen, Database, Save, X,
-  AlertTriangle, Filter, ArrowLeft, Lock, GripVertical, ChevronUp, ChevronDown
+  AlertTriangle, Filter, ArrowLeft, Lock, GripVertical, ChevronUp, ChevronDown, Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Section, Metric } from '../types';
@@ -22,7 +22,14 @@ import {
   saveDivisionsIndices,
   saveMetricsIndices,
   getTeamsChatId,
-  saveTeamsChatId
+  saveTeamsChatId,
+  getEmailAlertsEnabled,
+  saveEmailAlertsEnabled,
+  getTeamsAlertsEnabled,
+  saveTeamsAlertsEnabled,
+  fetchAlertEmails,
+  addAlertEmail,
+  removeAlertEmail
 } from '../services/configService';
 import { getCurrentSharePointUserEmail, hasSpContext } from '../services/spService';
 
@@ -46,10 +53,19 @@ export function Admin() {
   const [isSavingAccess, setIsSavingAccess] = useState(false);
   const [accessMessage, setAccessMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Email Notification Settings
+  const [emailAlertsEnabled, setEmailAlertsEnabled] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [alertEmails, setAlertEmails] = useState<{ id: string; email: string }[]>([]);
+  const [newAlertEmail, setNewAlertEmail] = useState('');
+  const [isSavingEmails, setIsSavingEmails] = useState(false);
+  const [emailConfigMessage, setEmailConfigMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Teams Settings
   const [teamsChatId, setTeamsChatId] = useState('');
   const [isSavingTeamsChatId, setIsSavingTeamsChatId] = useState(false);
   const [teamsMessage, setTeamsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [teamsAlertsEnabled, setTeamsAlertsEnabled] = useState(false);
 
   const [draggedSectionIndex, setDraggedSectionIndex] = useState<number | null>(null);
   const [draggedMetricIndex, setDraggedMetricIndex] = useState<{ sectionId: string, index: number } | null>(null);
@@ -174,9 +190,114 @@ export function Admin() {
       setSections(data);
       const teamsId = await getTeamsChatId();
       setTeamsChatId(teamsId);
+
+      const emailEnabled = await getEmailAlertsEnabled();
+      setEmailAlertsEnabled(emailEnabled);
+
+      const teamsEnabled = await getTeamsAlertsEnabled();
+      setTeamsAlertsEnabled(teamsEnabled);
     }
     setIsCheckingAccess(false);
     setIsLoading(false);
+  };
+
+  const handleToggleEmailAlerts = async (val: boolean) => {
+    try {
+      const ok = await saveEmailAlertsEnabled(val);
+      if (ok) {
+        setEmailAlertsEnabled(val);
+      } else {
+        alert("Erro ao salvar configuração de e-mail no SharePoint");
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message || "Erro ao salvar configuração");
+    }
+  };
+
+  const handleToggleTeamsAlerts = async (val: boolean) => {
+    if (val && !teamsChatId.trim()) {
+      setTeamsMessage({ 
+        type: 'error', 
+        text: 'Não é possível ativar as notificações do Teams sem antes definir e salvar um ID de chat válido!' 
+      });
+      setTimeout(() => setTeamsMessage(null), 7000);
+      return;
+    }
+    try {
+      const ok = await saveTeamsAlertsEnabled(val);
+      if (ok) {
+        setTeamsAlertsEnabled(val);
+        setTeamsMessage({ 
+          type: 'success', 
+          text: `Notificações do Teams ${val ? 'ativadas' : 'desativadas'} com sucesso!` 
+        });
+        setTimeout(() => setTeamsMessage(null), 5000);
+      } else {
+        setTeamsMessage({ type: 'error', text: 'Erro ao salvar configuração do Teams no SharePoint' });
+      }
+    } catch (e: any) {
+      console.error(e);
+      setTeamsMessage({ type: 'error', text: e?.message || "Erro ao salvar configuração" });
+    }
+  };
+
+  const loadAlertEmails = async () => {
+    try {
+      const list = await fetchAlertEmails();
+      setAlertEmails(list);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (isEmailModalOpen) {
+      loadAlertEmails();
+    }
+  }, [isEmailModalOpen]);
+
+  const handleAddAlertEmail = async () => {
+    if (!newAlertEmail.trim() || !newAlertEmail.includes('@')) {
+      setEmailConfigMessage({ type: 'error', text: 'Insira um e-mail válido' });
+      return;
+    }
+    setIsSavingEmails(true);
+    setEmailConfigMessage(null);
+    try {
+      const ok = await addAlertEmail(newAlertEmail);
+      if (ok) {
+        setEmailConfigMessage({ type: 'success', text: 'E-mail cadastrado com sucesso!' });
+        setNewAlertEmail('');
+        await loadAlertEmails();
+      } else {
+        setEmailConfigMessage({ type: 'error', text: 'Erro ao cadastrar e-mail' });
+      }
+    } catch (err: any) {
+      setEmailConfigMessage({ type: 'error', text: err?.message || 'Erro ao cadastrar e-mail' });
+    } finally {
+      setIsSavingEmails(false);
+    }
+  };
+
+  const handleRemoveAlertEmail = async (id: string, email: string) => {
+    if (window.confirm(`Deseja realmente remover ${email} da lista de e-mails de alerta?`)) {
+      setIsSavingEmails(true);
+      setEmailConfigMessage(null);
+      try {
+        const ok = await removeAlertEmail(id, email);
+        if (ok) {
+          setEmailConfigMessage({ type: 'success', text: 'E-mail removido com sucesso!' });
+          await loadAlertEmails();
+        } else {
+          setEmailConfigMessage({ type: 'error', text: 'Erro ao remover e-mail' });
+        }
+      } catch (err: any) {
+        setEmailConfigMessage({ type: 'error', text: err?.message || 'Erro ao remover e-mail' });
+      } finally {
+        setIsSavingEmails(false);
+      }
+    }
   };
 
   useEffect(() => {
@@ -357,27 +478,47 @@ export function Admin() {
                   Notificações do Microsoft Teams 
                   <span className="text-[9px] font-black uppercase bg-[#1f4e79] text-white px-2 py-0.5 rounded-full">Integração</span>
                 </h3>
-                <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Defina o ID do canal/chat Teams de destino (lista SharePoint <strong>App_Dash_Configs</strong>).</p>
+                <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Defina o ID do grupo/chat do Teams de destino (lista SharePoint <strong>App_Dash_Configs</strong>).</p>
               </div>
             </div>
             
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-md w-full md:w-auto">
-              <div className="flex-grow">
-                <input 
-                  type="text" 
-                  value={teamsChatId}
-                  onChange={(e) => setTeamsChatId(e.target.value)}
-                  placeholder="ID do Chat do Teams"
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-950 font-mono text-xs font-bold rounded-xl outline-none focus:ring-2 focus:ring-slate-950 transition-all"
-                />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-grow">
+                <div className="flex-grow">
+                  <input 
+                    type="text" 
+                    value={teamsChatId}
+                    onChange={(e) => setTeamsChatId(e.target.value)}
+                    placeholder="ID do Chat do Teams"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-950 font-mono text-xs font-bold rounded-xl outline-none focus:ring-2 focus:ring-slate-950 transition-all font-mono"
+                  />
+                </div>
+                <button 
+                  onClick={handleSaveTeamsChatId}
+                  disabled={isSavingTeamsChatId}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" /> {isSavingTeamsChatId ? 'Salvando...' : 'Salvar ID'}
+                </button>
               </div>
-              <button 
-                onClick={handleSaveTeamsChatId}
-                disabled={isSavingTeamsChatId}
-                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" /> {isSavingTeamsChatId ? 'Salvando...' : 'Salvar ID'}
-              </button>
+
+              {/* Status Toggle for Teams */}
+              <div className="flex items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 border-slate-100 pt-3 sm:pt-0 sm:pl-4 sm:border-l">
+                <div className="flex flex-col">
+                  <span className="text-xs font-black uppercase text-slate-600">Ativar Teams</span>
+                  <span className="text-[10px] text-slate-400">Canal ativo de alertas</span>
+                </div>
+                <button
+                  onClick={() => handleToggleTeamsAlerts(!teamsAlertsEnabled)}
+                  className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors duration-300 ${
+                    teamsAlertsEnabled ? 'bg-[#1f4e79]' : 'bg-slate-200'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${
+                    teamsAlertsEnabled ? 'translate-x-[26px]' : 'translate-x-[4px]'
+                  }`} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -398,6 +539,54 @@ export function Admin() {
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+
+        {/* Painel de Configuração de E-mail */}
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 sm:p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 sm:p-3 bg-red-50 text-brand-red rounded-xl flex-shrink-0">
+                <Mail className="w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-base font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
+                  Notificações por E-mail
+                  <span className="text-[9px] font-black uppercase bg-brand-red text-white px-2 py-0.5 rounded-full">Integração</span>
+                </h3>
+                <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
+                  Ative o envio de divergências e configure quem receberá os alertas (lista SharePoint <strong>App_Dash_Emails</strong>).
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
+              {/* Register Button */}
+              <button
+                onClick={() => { setIsEmailModalOpen(true); }}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl font-black text-xs uppercase tracking-widest text-slate-700 transition-all cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-4 h-4 text-slate-500" /> Cadastrar E-mails
+              </button>
+
+              {/* Status Toggle for Email */}
+              <div className="flex items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 border-slate-100 pt-3 sm:pt-0 sm:pl-4 sm:border-l overflow-visible">
+                <div className="flex flex-col">
+                  <span className="text-xs font-black uppercase text-slate-600 font-bold">Ativar E-mail</span>
+                  <span className="text-[10px] text-slate-400">Canal ativo de alertas</span>
+                </div>
+                <button
+                  onClick={() => handleToggleEmailAlerts(!emailAlertsEnabled)}
+                  className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors duration-300 ${
+                    emailAlertsEnabled ? 'bg-[#1f4e79]' : 'bg-slate-200'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${
+                    emailAlertsEnabled ? 'translate-x-[26px]' : 'translate-x-[4px]'
+                  }`} />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -869,6 +1058,94 @@ export function Admin() {
                               <X className="w-4 h-4" />
                             </button>
                           )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Gerenciamento de E-mails de Alerta */}
+      <AnimatePresence>
+        {isEmailModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="rounded-2xl sm:rounded-3xl p-5 sm:p-8 w-full max-w-lg shadow-2xl bg-white border border-slate-200 text-slate-900 overflow-hidden flex flex-col"
+            >
+              <div className="flex justify-between items-start gap-4 mb-6">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="p-2 rounded-xl bg-red-50 text-brand-red flex-shrink-0">
+                    <Mail className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-black uppercase italic tracking-tighter leading-tight">Lista de Alerta</h3>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-slate-400 mt-0.5">Gerenciar destinatários dos e-mails</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => { setIsEmailModalOpen(false); setEmailConfigMessage(null); }} 
+                  className="p-1.5 rounded-full transition-colors hover:bg-slate-100 text-slate-400 hover:text-slate-900 flex-shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {emailConfigMessage && (
+                <div className={`p-3 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-4 border ${emailConfigMessage.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-red-50 border-red-100 text-red-600'}`}>
+                  {emailConfigMessage.text}
+                </div>
+              )}
+
+              {/* Form to Add User Email */}
+              <div className="mb-6">
+                <label className="block text-[9px] font-black uppercase tracking-widest mb-1.5 text-slate-400">Cadastrar E-mail de Alerta</label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input 
+                    type="email" 
+                    value={newAlertEmail}
+                    onChange={(e) => setNewAlertEmail(e.target.value)}
+                    placeholder="Ex: administrador@empresa.com"
+                    className="flex-grow px-4 py-2.5 sm:py-3 border rounded-xl outline-none transition-all font-bold text-xs bg-slate-50 border-slate-200 text-slate-900 focus:ring-1 focus:ring-slate-900"
+                  />
+                  <button 
+                    onClick={handleAddAlertEmail}
+                    disabled={isSavingEmails}
+                    className="px-5 py-2.5 sm:py-3 bg-brand-red hover:bg-red-650 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap disabled:opacity-50"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable list of emails */}
+              <div className="flex flex-col">
+                <label className="block text-[9px] font-black uppercase tracking-widest mb-2 text-slate-400">Destinatários Cadastrados ({alertEmails.length})</label>
+                <div className="max-h-[180px] sm:max-h-[220px] overflow-y-auto rounded-xl sm:rounded-2xl border bg-slate-50 border-slate-200">
+                  {alertEmails.length === 0 ? (
+                    <p className="text-[10px] uppercase font-bold text-center py-8 text-slate-400 tracking-wider">Nenhum e-mail cadastrado</p>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {alertEmails.map(u => (
+                        <div key={u.id} className="p-3 sm:p-3.5 flex justify-between items-center hover:bg-slate-100 transition-colors">
+                          <div className="flex items-center gap-2 max-w-[80%] min-w-0">
+                            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                            <span className="font-extrabold text-[11px] sm:text-xs tracking-tight select-all truncate">{u.email}</span>
+                          </div>
+                          <button 
+                            onClick={() => handleRemoveAlertEmail(u.id, u.email)}
+                            disabled={isSavingEmails}
+                            className="p-1.5 text-slate-400 hover:text-brand-red rounded-lg hover:bg-red-50/10 transition-colors flex-shrink-0"
+                            title="Remover E-mail"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
                       ))}
                     </div>
