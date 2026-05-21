@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Plus, Edit2, Trash2, ChevronRight, Settings, Layout, 
   Activity, Shield, Clock, BookOpen, Database, Save, X,
-  AlertTriangle, Filter, ArrowLeft, Lock, GripVertical, ChevronUp, ChevronDown, Mail
+  AlertTriangle, Filter, ArrowLeft, Lock, GripVertical, ChevronUp, ChevronDown, Mail, HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Section, Metric } from '../types';
@@ -66,6 +66,9 @@ export function Admin() {
   const [isSavingTeamsChatId, setIsSavingTeamsChatId] = useState(false);
   const [teamsMessage, setTeamsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [teamsAlertsEnabled, setTeamsAlertsEnabled] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [testTeamsLink, setTestTeamsLink] = useState('');
+  const [extractedIdResult, setExtractedIdResult] = useState('');
 
   const [draggedSectionIndex, setDraggedSectionIndex] = useState<number | null>(null);
   const [draggedMetricIndex, setDraggedMetricIndex] = useState<{ sectionId: string, index: number } | null>(null);
@@ -256,6 +259,25 @@ export function Admin() {
       loadAlertEmails();
     }
   }, [isEmailModalOpen]);
+
+  useEffect(() => {
+    if (!testTeamsLink.trim()) {
+      setExtractedIdResult('');
+      return;
+    }
+    try {
+      const decodedLink = decodeURIComponent(testTeamsLink.trim());
+      const match = decodedLink.match(/(19:[a-zA-Z0-9_\-@]+(?:\.[a-zA-Z0-9_\-@]+)?)/);
+      if (match && match[1]) {
+        const cleanId = match[1].split('/')[0].split('?')[0].split('&')[0];
+        setExtractedIdResult(cleanId);
+      } else {
+        setExtractedIdResult('Não foi possível identificar o ID do Teams "19:...". Verifique se o link colado está no formato padrão.');
+      }
+    } catch (e) {
+      setExtractedIdResult('Erro ao decodificar o link fornecido.');
+    }
+  }, [testTeamsLink]);
 
   const handleAddAlertEmail = async () => {
     if (!newAlertEmail.trim() || !newAlertEmail.includes('@')) {
@@ -474,9 +496,18 @@ export function Admin() {
                 <Shield className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm sm:text-base font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-black uppercase text-slate-900 tracking-tight flex items-center gap-2 flex-wrap">
                   Notificações do Microsoft Teams 
                   <span className="text-[9px] font-black uppercase bg-[#1f4e79] text-white px-2 py-0.5 rounded-full">Integração</span>
+                  <button 
+                    type="button"
+                    onClick={() => setIsHelpModalOpen(true)}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs ml-1"
+                    title="Aprenda a capturar o ID correto"
+                  >
+                    <HelpCircle className="w-3 h-3 text-blue-600" />
+                    <span>Como obter o ID?</span>
+                  </button>
                 </h3>
                 <p className="text-[11px] sm:text-xs text-slate-500 mt-1">Defina o ID do grupo/chat do Teams de destino (lista SharePoint <strong>App_Dash_Configs</strong>).</p>
               </div>
@@ -1151,6 +1182,143 @@ export function Admin() {
                     </div>
                   )}
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Ajuda / Tutorial do MS Teams */}
+      <AnimatePresence>
+        {isHelpModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="rounded-2xl sm:rounded-3xl p-5 sm:p-7 w-full max-w-2xl shadow-2xl bg-white border border-slate-200 text-slate-900 overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="flex justify-between items-start gap-4 mb-4 pb-3 border-b border-slate-100 flex-shrink-0">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="p-2 rounded-xl bg-blue-50 text-blue-600 flex-shrink-0">
+                    <HelpCircle className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black uppercase text-slate-900 tracking-tight leading-none">Como obter o Chat/Grupo ID do Teams</h3>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-slate-400 mt-0.5">Configure passo a passo os seus alertas operacionais no Teams</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => { setIsHelpModalOpen(false); setTestTeamsLink(''); }} 
+                  className="p-1.5 rounded-full transition-colors hover:bg-slate-100 text-slate-400 hover:text-slate-900 flex-shrink-0 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Scrollable content */}
+              <div className="overflow-y-auto pr-1 space-y-4 text-xs sm:text-sm text-slate-600">
+                <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
+                  <p className="font-extrabold text-[10px] uppercase tracking-wide text-slate-500">Fluxo pelos Aplicativos (Teams Desktop ou Web)</p>
+                  <ol className="list-decimal pl-5 space-y-1.5 font-bold text-slate-700 text-xs leading-relaxed">
+                    <li>Abra o <span className="text-slate-900 font-extrabold">Microsoft Teams</span>.</li>
+                    <li>Vá na aba do menu lateral <span className="text-slate-900 font-extrabold">Equipes</span> (ou nas suas conversas).</li>
+                    <li>Clique nos <span className="text-slate-900 font-extrabold">três pontinhos (...)</span> localizado ao lado do nome da canal/grupo ou equipe.</li>
+                    <li>Selecione <span className="text-slate-900 font-extrabold">"Obter link para a equipe" (ou "Get link to team")</span> e copie o link gerado.</li>
+                    <li>Cole no campo abaixo para isolarmos o ID para você em 1 clique!</li>
+                  </ol>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-3 border border-dashed border-slate-200 rounded-xl bg-blue-50/10">
+                    <h4 className="text-[9px] font-black uppercase tracking-wider text-slate-400 mb-1">Para Chat Individual / Privado comum:</h4>
+                    <p className="text-[10px] leading-normal font-bold text-slate-600">
+                      O link copiado costuma ser similar a:
+                    </p>
+                    <div className="bg-slate-100/80 text-slate-700 p-2 rounded-lg font-mono text-[9px] mt-1 break-all select-all font-semibold leading-relaxed">
+                      https://teams.microsoft.com/l/chat/<span className="bg-yellow-200 text-slate-900 font-extrabold px-0.5 rounded">19:173b6b51-bde9-48e9-8125-9153dd100f4c_bb0a56bd-0e15-461e-a4d4-e33af5f669b8@unq.gbl.spaces</span>/conversations?context=...
+                    </div>
+                    <p className="text-[10px] mt-2 font-black text-blue-600">
+                      O ID correto é a parte em destaque amarelo.
+                    </p>
+                  </div>
+
+                  <div className="p-3 border border-dashed border-slate-200 rounded-xl bg-emerald-50/10">
+                    <h4 className="text-[9px] font-black uppercase tracking-wider text-slate-400 mb-1">Para Chat em Grupo / Canal de Equipes:</h4>
+                    <p className="text-[10px] leading-normal font-bold text-slate-600">
+                      O link copiado costuma ser similar a:
+                    </p>
+                    <div className="bg-slate-100/80 text-slate-700 p-2 rounded-lg font-mono text-[9px] mt-1 break-all select-all font-semibold leading-relaxed">
+                      https://teams.microsoft.com/l/chat/<span className="bg-yellow-200 text-slate-900 font-extrabold px-0.5 rounded">19:39fa3bb7be4c4b82a762c6af137f181c@thread.v2</span>/conversations?context=...
+                    </div>
+                    <p className="text-[10px] mt-2 font-black text-emerald-600">
+                      O ID correto é a parte em destaque amarelo.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Live Parser Box */}
+                <div className="border-t border-slate-100 pt-3.5 space-y-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-800">Ferramenta: Extrator Inteligente de Link do Teams</h4>
+                  </div>
+                  <p className="text-[10px] leading-normal font-bold text-slate-500 uppercase tracking-widest">Cole o link gerado do Teams abaixo para isolarmos o ID sem complicações:</p>
+                  
+                  <textarea 
+                    rows={2}
+                    value={testTeamsLink}
+                    onChange={(e) => setTestTeamsLink(e.target.value)}
+                    placeholder="Cole o endereço completo aqui..."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-slate-900 font-bold text-xs rounded-xl outline-none focus:ring-1 focus:ring-slate-900"
+                  />
+
+                  {extractedIdResult && (
+                    <div className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${extractedIdResult.startsWith('19:') ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+                      <div className="min-w-0 flex-grow">
+                        <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400 mb-0.5">ID Identificado:</span>
+                        <code className="text-[10px] sm:text-[11px] font-mono font-black break-all select-all">{extractedIdResult}</code>
+                      </div>
+                      {extractedIdResult.startsWith('19:') && (
+                        <div className="flex gap-1.5 flex-shrink-0 self-end sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(extractedIdResult);
+                              alert('ID copiado!');
+                            }}
+                            className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 font-black text-[9px] uppercase tracking-wider rounded-lg transition-all"
+                          >
+                            Copiar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTeamsChatId(extractedIdResult);
+                              setIsHelpModalOpen(false);
+                              setTestTeamsLink('');
+                              setTeamsMessage({ type: 'success', text: 'ID extraído e configurado no painel! Lembre-se de clicar no botão "Salvar ID" para gravar.' });
+                              setTimeout(() => setTeamsMessage(null), 8000);
+                            }}
+                            className="px-2.5 py-1.5 bg-[#1f4e79] hover:bg-[#153552] text-white font-black text-[9px] uppercase tracking-wider rounded-lg transition-all flex items-center gap-1 shadow-sm"
+                          >
+                            <Save className="w-3 h-3 text-white" /> Aplicar ID
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { setIsHelpModalOpen(false); setTestTeamsLink(''); }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer shadow-sm"
+                >
+                  OK, FECHAR
+                </button>
               </div>
             </motion.div>
           </div>

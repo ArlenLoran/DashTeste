@@ -1746,10 +1746,15 @@ export function Dashboard() {
       try {
         const emailE = await getEmailAlertsEnabled();
         setGlobalEmailAlertsEnabled(emailE);
+      } catch (err) {
+        console.error("Error loading EmailAlertsEnabled in init:", err);
+      }
+
+      try {
         const teamsE = await getTeamsAlertsEnabled();
         setGlobalTeamsAlertsEnabled(teamsE);
       } catch (err) {
-        console.error("Error loading notification configs on init:", err);
+        console.error("Error loading TeamsAlertsEnabled in init:", err);
       }
     };
     initApp();
@@ -1775,10 +1780,15 @@ export function Dashboard() {
       try {
         const emailE = await getEmailAlertsEnabled();
         setGlobalEmailAlertsEnabled(emailE);
+      } catch (err) {
+        console.error("Error loading EmailAlertsEnabled in refresh:", err);
+      }
+
+      try {
         const teamsE = await getTeamsAlertsEnabled();
         setGlobalTeamsAlertsEnabled(teamsE);
       } catch (err) {
-        console.error("Error reloading notification configs on refresh:", err);
+        console.error("Error loading TeamsAlertsEnabled in refresh:", err);
       }
 
       await fetchAllDataInternal(config);
@@ -1853,8 +1863,17 @@ export function Dashboard() {
         triggerAlarm(`Alerta! Nova divergência detectada na métrica: ${newlyFoundErrors.join(', ')}`, 'critical');
         // Trigger emails asynchronously for each detected divergence
         newlyFoundErrorList.forEach(errItem => {
-          sendDivergenceEmail(errItem.title, errItem.data);
-          sendTeamsNotification(errItem.title, errItem.data);
+          try {
+            sendDivergenceEmail(errItem.title, errItem.data);
+          } catch (e1) {
+            console.error("Error triggering email alarm:", e1);
+          }
+
+          try {
+            sendTeamsNotification(errItem.title, errItem.data);
+          } catch (e2) {
+            console.error("Error triggering Teams alarm:", e2);
+          }
         });
       } else if (resolvedErrors.length > 0) {
         triggerAlarm(`Excelente! Divergência resolvida na métrica: ${resolvedErrors.join(', ')}`, 'success');
@@ -1904,8 +1923,17 @@ export function Dashboard() {
       // Trigger notifications if needed
       if (isNowError && !wasError) {
         triggerAlarm(`Alerta! Nova divergência detectada na métrica: ${metric.title}`, 'critical');
-        sendDivergenceEmail(metric.title, Array.isArray(result) ? result : []);
-        sendTeamsNotification(metric.title, Array.isArray(result) ? result : []);
+        try {
+          sendDivergenceEmail(metric.title, Array.isArray(result) ? result : []);
+        } catch (e1) {
+          console.error("Error triggering email alarm:", e1);
+        }
+
+        try {
+          sendTeamsNotification(metric.title, Array.isArray(result) ? result : []);
+        } catch (e2) {
+          console.error("Error triggering Teams alarm:", e2);
+        }
       } else if (!isNowError && wasError) {
         triggerAlarm(`Excelente! Divergência resolvida na métrica: ${metric.title}`, 'success');
       }
